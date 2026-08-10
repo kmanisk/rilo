@@ -13,7 +13,7 @@ use models::DownloadCommand;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::time::{sleep, Duration};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -28,6 +28,23 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            if args.len() > 1 {
+                let potential_url = &args[1];
+                if potential_url.starts_with("http://") || potential_url.starts_with("https://") {
+                    let _ = app.emit("extension-download", crate::core::server::browser_server::ExtensionDownloadPayload {
+                        url: potential_url.to_string(),
+                        filename: None,
+                        referrer: None,
+                    });
+                }
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
