@@ -1,0 +1,9 @@
+{
+  "name": "com.rilo.downloader",
+  "description": "Rilo Native Messaging Host for Firefox",
+  "path": "rilo-host.exe",
+  "type": "stdio",
+  "allowed_extensions": [
+    "rilo-extension@rilo.com"
+  ]
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rilo Extension Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div className="options-container">
+    <header className="options-header">
+      <div className="logo">R</div>
+      <div>
+        <h1>Rilo Extension Options</h1>
+        <p>Manage browser integration preferences</p>
+      </div>
+    </header>
+
+    <main className="options-body">
+      <div className="section">
+        <h2>Interception Settings</h2>
+        
+        <label className="checkbox-row">
+          <input type="checkbox" id="auto-intercept" checked />
+          <div>
+            <span className="label-title">Automatically intercept download links</span>
+            <span className="label-desc">Send downloadable files directly to Rilo instead of native browser downloader</span>
+          </div>
+        </label>
+      </div>
+
+      <div className="section">
+        <h2>Notifications & Status</h2>
+
+        <label className="checkbox-row">
+          <input type="checkbox" id="show-notifications" checked />
+          <div>
+            <span className="label-title">Desktop toast notifications</span>
+            <span className="label-desc">Show notification when downloads are sent to Rilo</span>
+          </div>
+        </label>
+      </div>
+
+      <div className="actions">
+        <span id="save-status" className="save-status"></span>
+        <button id="save-btn" className="save-btn">Save Preferences</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

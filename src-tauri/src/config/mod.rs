@@ -1,0 +1,285 @@
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    pub version: u32,
+    pub download: DownloadConfig,
+    pub scheduler: SchedulerConfig,
+    pub appearance: AppearanceConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadConfig {
+    pub download_directory: String,
+    pub max_concurrent_downloads: u32,
+    pub max_connections_per_download: u32,
+    pub retry_count: u32,
+    pub retry_delay_seconds: u32,
+    pub global_speed_limit_kbps: u64,
+    pub auto_start: bool,
+    #[serde(default)]
+    pub auto_extract_archives: bool,
+    #[serde(default)]
+    pub delete_archive_after_extraction: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchedulerConfig {
+    pub schedule_enabled: bool,
+    pub start_time: String,
+    pub stop_time: String,
+    pub post_download_action: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceConfig {
+    pub theme: String,
+    pub accent_color: String,
+    pub font_family: String,
+    pub font_size: String,
+    pub font_size_px: u32,
+    pub density: String,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            download: DownloadConfig::default(),
+            scheduler: SchedulerConfig::default(),
+            appearance: AppearanceConfig::default(),
+        }
+    }
+}
+
+impl Default for DownloadConfig {
+    fn default() -> Self {
+        Self {
+            download_directory: String::new(),
+            max_concurrent_downloads: 4,
+            max_connections_per_download: 4,
+            retry_count: 3,
+            retry_delay_seconds: 5,
+            global_speed_limit_kbps: 0,
+            auto_start: false,
+            auto_extract_archives: false,
+            delete_archive_after_extraction: false,
+        }
+    }
+}
+
+impl Default for SchedulerConfig {
+    fn default() -> Self {
+        Self {
+            schedule_enabled: false,
+            start_time: "22:00".to_string(),
+            stop_time: "06:00".to_string(),
+            post_download_action: "none".to_string(),
+        }
+    }
+}
+
+impl Default for AppearanceConfig {
+    fn default() -> Self {
+        Self {
+            theme: "dark".to_string(),
+            accent_color: "indigo".to_string(),
+            font_family: "Inter".to_string(),
+            font_size: "Default".to_string(),
+            font_size_px: 14,
+            density: "Comfortable".to_string(),
+        }
+    }
+}
+
+impl AppConfig {
+    /// Validates all configuration settings and clamps values within safe operational bounds.
+    pub fn validate(&mut self) {
+        self.version = 1;
+
+        // Download Config Validation
+        self.download.max_concurrent_downloads = self.download.max_concurrent_downloads.clamp(1, 16);
+        self.download.max_connections_per_download = self.download.max_connections_per_download.clamp(1, 32);
+        self.download.retry_count = self.download.retry_count.clamp(0, 10);
+        self.download.retry_delay_seconds = self.download.retry_delay_seconds.clamp(1, 60);
+
+        // Scheduler Validation
+        if !validate_hhmm(&self.scheduler.start_time) {
+            self.scheduler.start_time = "22:00".to_string();
+        }
+        if !validate_hhmm(&self.scheduler.stop_time) {
+            self.scheduler.stop_time = "06:00".to_string();
+        }
+
+        let valid_actions = ["none", "notify", "sleep", "shutdown"];
+        if !valid_actions.contains(&self.scheduler.post_download_action.as_str()) {
+            self.scheduler.post_download_action = "none".to_string();
+        }
+
+        // Appearance Validation
+        let valid_themes = ["dark", "light"];
+        if !valid_themes.contains(&self.appearance.theme.as_str()) {
+            self.appearance.theme = "dark".to_string();
+        }
+
+        let valid_accents = ["indigo", "blue", "purple", "green", "orange", "red"];
+        if !valid_accents.contains(&self.appearance.accent_color.to_lowercase().as_str()) {
+            self.appearance.accent_color = "indigo".to_string();
+        }
+
+        let valid_fonts = ["Inter", "Geist", "IBM Plex Sans", "System"];
+        if !valid_fonts.contains(&self.appearance.font_family.as_str()) {
+            self.appearance.font_family = "Inter".to_string();
+        }
+
+        let valid_sizes = ["Small", "Default", "Large"];
+        if !valid_sizes.contains(&self.appearance.font_size.as_str()) {
+            self.appearance.font_size = "Default".to_string();
+        }
+
+        if self.appearance.font_size_px == 0 {
+            self.appearance.font_size_px = 14;
+        }
+        self.appearance.font_size_px = self.appearance.font_size_px.clamp(12, 20);
+
+        let valid_densities = ["Compact", "Comfortable", "Spacious"];
+        if !valid_densities.contains(&self.appearance.density.as_str()) {
+            self.appearance.density = "Comfortable".to_string();
+        }
+    }
+
+    /// Loads configuration from the given file path.
+    /// If missing or malformed, logs error, applies safe defaults, and saves a fresh config.
+    pub fn load_or_create(config_path: &Path) -> Self {
+        if let Some(parent) = config_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+
+        if config_path.exists() {
+            match fs::read_to_string(config_path) {
+                Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
+                    Ok(mut config) => {
+                        config.validate();
+                        return config;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[CONFIG WARNING] Failed parsing {:?}: {}. Falling back to defaults.",
+                            config_path, e
+                        );
+                    }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "[CONFIG WARNING] Failed reading {:?}: {}. Falling back to defaults.",
+                        config_path, e
+                    );
+                }
+            }
+        }
+
+        let mut default_config = AppConfig::default();
+        default_config.validate();
+        let _ = default_config.save_atomic(config_path);
+        default_config
+    }
+
+    /// Atomic write to prevent file corruption on crash:
+    /// Writes to config.json.tmp, flushes, and renames atomically to target path.
+    pub fn save_atomic(&self, config_path: &Path) -> Result<(), String> {
+        if let Some(parent) = config_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+
+        let tmp_path = config_path.with_extension("tmp");
+        let json_data = serde_json::to_string_pretty(self)
+            .map_err(|e| format!("Failed serializing config: {}", e))?;
+
+        fs::write(&tmp_path, json_data)
+            .map_err(|e| format!("Failed writing temporary config file: {}", e))?;
+
+        fs::rename(&tmp_path, config_path)
+            .map_err(|e| format!("Failed atomic config replacement: {}", e))?;
+
+        Ok(())
+    }
+}
+
+fn validate_hhmm(val: &str) -> bool {
+    let parts: Vec<&str> = val.split(':').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let h: u32 = match parts[0].parse() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let m: u32 = match parts[1].parse() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    h < 24 && m < 60
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_config_default_validation() {
+        let mut config = AppConfig::default();
+        config.validate();
+
+        assert_eq!(config.version, 1);
+        assert_eq!(config.download.max_concurrent_downloads, 4);
+        assert_eq!(config.download.max_connections_per_download, 4);
+        assert_eq!(config.appearance.theme, "dark");
+        assert_eq!(config.appearance.font_family, "Inter");
+        assert_eq!(config.appearance.font_size_px, 14);
+    }
+
+    #[test]
+    fn test_config_validation_clamping() {
+        let mut config = AppConfig::default();
+        config.download.max_concurrent_downloads = 999;
+        config.download.max_connections_per_download = 0;
+        config.download.retry_count = 100;
+        config.scheduler.start_time = "invalid_time".to_string();
+        config.appearance.theme = "neon".to_string();
+        config.appearance.font_size_px = 50;
+
+        config.validate();
+
+        assert_eq!(config.download.max_concurrent_downloads, 16);
+        assert_eq!(config.download.max_connections_per_download, 1);
+        assert_eq!(config.download.retry_count, 10);
+        assert_eq!(config.scheduler.start_time, "22:00");
+        assert_eq!(config.appearance.theme, "dark");
+        assert_eq!(config.appearance.font_size_px, 20);
+    }
+
+    #[test]
+    fn test_config_atomic_write_and_reload() {
+        let temp_dir = std::env::temp_dir().join("downloader_config_test");
+        let _ = fs::create_dir_all(&temp_dir);
+        let config_file = temp_dir.join("config.json");
+
+        let mut original = AppConfig::default();
+        original.download.max_concurrent_downloads = 8;
+        original.appearance.accent_color = "purple".to_string();
+        original.appearance.font_size_px = 16;
+
+        original.save_atomic(&config_file).expect("Atomic save failed");
+        assert!(config_file.exists());
+
+        let loaded = AppConfig::load_or_create(&config_file);
+        assert_eq!(loaded.download.max_concurrent_downloads, 8);
+        assert_eq!(loaded.appearance.accent_color, "purple");
+        assert_eq!(loaded.appearance.font_size_px, 16);
+
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+}

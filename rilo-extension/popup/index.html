@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rilo Download Manager</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div className="popup-container">
+    <!-- Header -->
+      <img src="../icons/icon32.png" alt="Rilo Logo" class="rilo-logo-img" />
+      <div className="rilo-brand">
+        <h1 className="rilo-name">Rilo</h1>
+        <span className="rilo-sub">Download Manager</span>
+      </div>
+    </div>
+
+    <div className="popup-divider"></div>
+
+    <!-- Catch Links Primary Toggle -->
+    <div className="toggle-section">
+      <div className="toggle-label-group">
+        <span className="toggle-title">Catch Links</span>
+        <span id="status-desc" className="toggle-desc">Catching supported downloads</span>
+      </div>
+      <label className="switch">
+        <input type="checkbox" id="catch-links-toggle" checked />
+        <span className="slider"></span>
+      </label>
+    </div>
+
+    <div className="popup-divider"></div>
+
+    <!-- Status Footer -->
+    <div className="popup-footer">
+      <div className="status-indicator">
+        <span id="connection-dot" className="dot online">●</span>
+        <span id="connection-text" className="status-text">Rilo connected</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

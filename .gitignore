@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build Outputs
+dist/
+dist-isolation/
+src-tauri/target/
+
+# System / IDE Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# Runtime Data
+downloads.db
+config.json
+*.tmp

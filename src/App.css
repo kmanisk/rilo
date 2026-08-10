@@ -1,0 +1,210 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Centralized Production Rilo Design Token & Theme Engine */
+  :root {
+    --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --rilo-font-size: 14px;
+
+    /* Base Dark Theme Defaults */
+    --background: #09090b;
+    --surface: #121215;
+    --surface-elevated: #18181c;
+    --surface-selected: #24242c;
+    --surface-hover: #1c1c22;
+
+    --text-primary: #f4f4f5;
+    --text-secondary: #a1a1aa;
+    --text-muted: #71717a;
+
+    --border: #27272a;
+    --border-subtle: #1e1e24;
+
+    /* Base Accent: Indigo */
+    --rilo-accent: #6366f1;
+    --rilo-accent-hover: #4f46e5;
+    --rilo-accent-active: #4338ca;
+    --rilo-accent-muted: rgba(99, 102, 241, 0.15);
+    --rilo-accent-border: rgba(99, 102, 241, 0.35);
+
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #f43f5e;
+
+    /* Default Density (Comfortable) */
+    --download-card-padding: 12px 14px;
+    --download-card-gap: 10px;
+    --download-card-spacing: 8px;
+  }
+
+  /* Interface Theme: Light */
+  [data-theme="light"] {
+    --background: #f8fafc;
+    --surface: #ffffff;
+    --surface-elevated: #f1f5f9;
+    --surface-selected: #e2e8f0;
+    --surface-hover: #f8fafc;
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    --border: #cbd5e1;
+    --border-subtle: #e2e8f0;
+
+    --success: #059669;
+    --warning: #d97706;
+    --error: #e11d48;
+  }
+
+  /* Accent Color Palette Definitions */
+  [data-accent="indigo"] {
+    --rilo-accent: #6366f1;
+    --rilo-accent-hover: #4f46e5;
+    --rilo-accent-active: #4338ca;
+    --rilo-accent-muted: rgba(99, 102, 241, 0.15);
+    --rilo-accent-border: rgba(99, 102, 241, 0.35);
+  }
+
+  [data-accent="blue"] {
+    --rilo-accent: #3b82f6;
+    --rilo-accent-hover: #2563eb;
+    --rilo-accent-active: #1d4ed8;
+    --rilo-accent-muted: rgba(59, 130, 246, 0.15);
+    --rilo-accent-border: rgba(59, 130, 246, 0.35);
+  }
+
+  [data-accent="purple"] {
+    --rilo-accent: #a855f7;
+    --rilo-accent-hover: #9333ea;
+    --rilo-accent-active: #7e22ce;
+    --rilo-accent-muted: rgba(168, 85, 247, 0.15);
+    --rilo-accent-border: rgba(168, 85, 247, 0.35);
+  }
+
+  [data-accent="emerald"], [data-accent="green"] {
+    --rilo-accent: #10b981;
+    --rilo-accent-hover: #059669;
+    --rilo-accent-active: #047857;
+    --rilo-accent-muted: rgba(16, 185, 129, 0.15);
+    --rilo-accent-border: rgba(16, 185, 129, 0.35);
+  }
+
+  [data-accent="orange"] {
+    --rilo-accent: #f97316;
+    --rilo-accent-hover: #ea580c;
+    --rilo-accent-active: #c2410c;
+    --rilo-accent-muted: rgba(249, 115, 22, 0.15);
+    --rilo-accent-border: rgba(249, 115, 22, 0.35);
+  }
+
+  [data-accent="rose"], [data-accent="red"] {
+    --rilo-accent: #f43f5e;
+    --rilo-accent-hover: #e11d48;
+    --rilo-accent-active: #be123c;
+    --rilo-accent-muted: rgba(244, 63, 94, 0.15);
+    --rilo-accent-border: rgba(244, 63, 94, 0.35);
+  }
+
+  /* Row Layout Density Variants */
+  [data-density="compact"] {
+    --download-card-padding: 8px 12px;
+    --download-card-gap: 6px;
+    --download-card-spacing: 4px;
+  }
+
+  [data-density="comfortable"] {
+    --download-card-padding: 12px 14px;
+    --download-card-gap: 10px;
+    --download-card-spacing: 8px;
+  }
+
+  [data-density="spacious"] {
+    --download-card-padding: 16px 18px;
+    --download-card-gap: 14px;
+    --download-card-spacing: 12px;
+  }
+
+  /* Font Family Variants */
+  [data-font="Inter"] { --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; }
+  [data-font="Geist"] { --font-family: "Geist", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  [data-font="IBM Plex Sans"] { --font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  [data-font="JetBrains Mono"] { --font-family: "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New", monospace; }
+  [data-font="Iosevka"] { --font-family: "Iosevka", "Cascadia Mono", "Consolas", "Courier New", monospace; }
+  [data-font="Roboto"] { --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  [data-font="System"] { --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+  /* Global Universal Reset & Design System Token Integration */
+  *, *::before, *::after {
+    font-family: var(--font-family);
+  }
+
+  html, body {
+    font-size: var(--rilo-font-size);
+    background-color: var(--background);
+    color: var(--text-primary);
+    user-select: none;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  select, option, input, textarea {
+    background-color: var(--surface-elevated);
+    color: var(--text-primary);
+    border-color: var(--border);
+    user-select: text;
+  }
+
+  select option {
+    background-color: var(--surface);
+    color: var(--text-primary);
+  }
+
+  /* Accessible Focus Ring styling powered by selected accent */
+  *:focus-visible {
+    outline: 2px solid var(--rilo-accent);
+    outline-offset: 1px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(140, 140, 160, 0.25);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(140, 140, 160, 0.45);
+  }
+}
+
+/* Custom Design Token Utility Classes */
+.bg-rilo-bg { background-color: var(--background) !important; }
+.bg-rilo-surface { background-color: var(--surface) !important; }
+.bg-rilo-elevated { background-color: var(--surface-elevated) !important; }
+.bg-rilo-selected { background-color: var(--surface-selected) !important; }
+
+.text-rilo-primary { color: var(--text-primary) !important; }
+.text-rilo-secondary { color: var(--text-secondary) !important; }
+.text-rilo-muted { color: var(--text-muted) !important; }
+
+.border-rilo-border { border-color: var(--border) !important; }
+.border-rilo-subtle { border-color: var(--border-subtle) !important; }
+
+.bg-rilo-accent { background-color: var(--rilo-accent) !important; color: #ffffff !important; }
+.hover\:bg-rilo-accent-hover:hover { background-color: var(--rilo-accent-hover) !important; }
+.text-rilo-accent { color: var(--rilo-accent) !important; }
+.border-rilo-accent { border-color: var(--rilo-accent-border) !important; }
+.bg-rilo-accent-muted { background-color: var(--rilo-accent-muted) !important; }

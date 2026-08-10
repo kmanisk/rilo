@@ -1,0 +1,9 @@
+{
+  "name": "com.rilo.downloader",
+  "description": "Rilo Native Messaging Host for Chrome",
+  "path": "rilo-host.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://*/"
+  ]
+}
