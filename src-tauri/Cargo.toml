@@ -14,10 +14,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "downloader"
 path = "src/main.rs"
 
-[[bin]]
-name = "rilo-host"
-path = "src/bin/rilo_host.rs"
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -18,6 +18,15 @@ use tokio::time::{sleep, Duration};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    let is_native_host = args.iter().any(|arg| arg == "--native-host")
+        || (args.len() > 1 && (args[1].starts_with("chrome-extension://") || args[1].starts_with("moz-extension://") || args[1].ends_with(".json")));
+
+    if is_native_host {
+        native_host::run_native_host();
+        return;
+    }
+
     // Suppress Edge Sidebar, PDF tools, and browser chrome inside WebView2
     #[cfg(target_os = "windows")]
     {

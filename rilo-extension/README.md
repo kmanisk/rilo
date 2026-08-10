@@ -33,13 +33,13 @@ Official browser extension for **Rilo Download Manager** (Manifest V3). Allows s
 
 ## 🔌 Native Messaging Host Registration (Windows)
 
-To allow Chrome and Firefox to communicate directly with `rilo-host.exe`:
+To allow Chrome and Firefox to communicate directly with `rilo.exe`:
 
-1. Build the Rust native host binary:
+1. Build the unified Rilo executable:
    ```bash
-   cargo build --bin rilo-host --manifest-path src-tauri/Cargo.toml
+   cargo build --manifest-path src-tauri/Cargo.toml --release
    ```
-2. Run `rilo-extension/native-host/register_native_host.bat` as Administrator to register `com.rilo.downloader` in Windows Registry (`HKCU\Software\Google\Chrome\NativeMessagingHosts` and `HKCU\Software\Mozilla\NativeMessagingHosts`).
+2. Launching Rilo desktop application automatically registers `com.rilo.downloader` native messaging host manifests in Windows Registry (`HKCU\Software\Google\Chrome\NativeMessagingHosts` and `HKCU\Software\Mozilla\NativeMessagingHosts`).
 
 ---
 

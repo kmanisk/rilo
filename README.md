@@ -54,8 +54,8 @@
 flowchart TB
     Browser[Browser Chrome/Firefox]
     Extension[Rilo WebExtension MV3]
-    Host[Rilo Native Host rilo-host.exe]
-    App[Rilo Desktop App downloader.exe]
+    Host[Rilo Native Host rilo.exe --native-host]
+    App[Rilo Desktop App rilo.exe]
     UI[Preact + TypeScript Frontend]
     Tauri[Tauri v2 Core]
     Engine[Rust Multi-Segment Engine]
@@ -104,14 +104,9 @@ flowchart TB
    pnpm build
    ```
 
-4. **Build Tauri Desktop Application**:
+4. **Build Rilo Executable (GUI & Native Host)**:
    ```bash
    cargo build --manifest-path src-tauri/Cargo.toml --release
-   ```
-
-5. **Build Native Messaging Host**:
-   ```bash
-   cargo build --manifest-path src-tauri/Cargo.toml --bin rilo-host --release
    ```
 
 ---
