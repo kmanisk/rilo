@@ -1,0 +1,135 @@
+/* ==========================================================================
+   RILO GITHUB PAGES LANDING WEBSITE - MASTER STYLESHEET
+   ========================================================================== */
+
+/* 1. Tailwind CDN fallback & Core CSS Variables */
+@import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+
+:root {
+  --rilo-bg-dark: #09090b;
+  --rilo-surface-dark: #121215;
+  --rilo-elevated-dark: #18181b;
+  --rilo-border-dark: #27272a;
+  --rilo-accent-indigo: #6366f1;
+  --rilo-accent-indigo-hover: #4f46e5;
+  --rilo-accent-indigo-light: #818cf8;
+  --rilo-text-primary: #f4f4f5;
+  --rilo-text-secondary: #a1a1aa;
+  --rilo-text-muted: #71717a;
+}
+
+/* 2. Global Resets & Typography */
+html {
+  scroll-behavior: smooth;
+  background-color: var(--rilo-bg-dark);
+  color: var(--rilo-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+}
+
+body {
+  background-color: #09090b;
+  color: #f4f4f5;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 3. Sticky Navigation Header Styles */
+#site-header.scrolled {
+  background-color: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom-color: rgba(39, 39, 42, 0.8);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* 4. Custom Utility Classes */
+.bg-rilo-dark {
+  background-color: #09090b;
+}
+
+.text-rilo-light {
+  color: #f4f4f5;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* 5. Custom Glow & Glassmorphism Effects */
+.glass-panel {
+  background: rgba(18, 18, 21, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.8);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 60px -15px rgba(99, 102, 241, 0.25);
+}
+
+/* 6. Screenshot Lightbox & Zoom Interactions */
+.lightbox-trigger {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.lightbox-trigger:hover {
+  filter: brightness(1.05);
+}
+
+#lightbox.active {
+  display: flex !important;
+  opacity: 1 !important;
+}
+
+/* 7. Animations & Scroll Reveal */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 8. Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 9. Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}

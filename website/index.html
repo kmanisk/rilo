@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rilo — Fast Native Download Manager for Windows</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Rilo is a fast, lightweight native desktop download manager for Windows built with Rust, Preact, and SQLite. Features multi-connection acceleration, pause & resume, browser link catching, and automated scheduling." />
+  <meta name="keywords" content="download manager, windows download manager, rust download manager, tauri download manager, multi-connection downloader, browser link catcher, rilo" />
+  <meta name="author" content="kmanisk" />
+  <meta name="theme-color" content="#09090b" />
+  
+  <!-- Open Graph / Facebook / Discord -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://kmanisk.github.io/rilo/" />
+  <meta property="og:title" content="Rilo — Fast Native Download Manager for Windows" />
+  <meta property="og:description" content="Native Windows download manager built around a Rust-powered multi-connection engine with pause & resume, browser integration, and SQLite persistence." />
+  <meta property="og:image" content="assets/screenshots/img.png" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Rilo — Fast Native Download Manager for Windows" />
+  <meta name="twitter:description" content="Fast, native Windows download manager with multi-connection acceleration, browser link catching, and SQLite persistence." />
+  <meta name="twitter:image" content="assets/screenshots/img.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/logo.png" />
+  <link rel="apple-touch-icon" href="assets/logo.png" />
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-rilo-dark text-rilo-light font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+
+  <!-- ========================================== -->
+  <!-- NAVIGATION HEADER                          -->
+  <!-- ========================================== -->
+  <header id="site-header" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-transparent">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <a href="#" class="flex items-center space-x-3 group">
+        <img src="assets/logo.png" alt="Rilo Logo" class="w-8 h-8 rounded-lg shadow-md group-hover:scale-105 transition-transform" />
+        <div class="flex items-center space-x-2">
+          <span class="font-bold text-lg text-white tracking-tight group-hover:text-indigo-400 transition-colors">Rilo</span>
+          <span class="px-2 py-0.5 text-[10px] font-mono font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">v1.0</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <nav class="hidden md:flex items-center space-x-7 text-sm font-medium text-zinc-300">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#how-it-works" class="hover:text-white transition-colors">How It Works</a>
+        <a href="#extension" class="hover:text-white transition-colors">Browser Extension</a>
+        <a href="#architecture" class="hover:text-white transition-colors">Architecture</a>
+        <a href="#engine" class="hover:text-white transition-colors">Engine</a>
+        <a href="#screenshots" class="hover:text-white transition-colors">Screenshots</a>
+      </nav>
+
+      <!-- Right Action Button -->
+      <div class="hidden md:flex items-center space-x-4">
+        <a href="https://github.com/kmanisk/rilo" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-sm font-medium text-zinc-200 border border-zinc-700/60 transition-all hover:border-zinc-500 shadow-sm">
+          <svg class="w-4 h-4 fill-current text-zinc-400" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a href="https://github.com/kmanisk/rilo/releases/latest/download/rilo.exe" class="inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          <span>Download</span>
+        </a>
+      </div>
+
+      <!-- Mobile Hamburger Button -->
+      <button id="mobile-menu-btn" type="button" class="md:hidden p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 focus:outline-none" aria-label="Toggle menu">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path id="menu-icon-open" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          <path id="menu-icon-close" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Mobile Drawer Navigation -->
+    <div id="mobile-menu" class="hidden md:hidden bg-zinc-900/95 backdrop-blur-xl border-b border-zinc-800 px-4 pt-3 pb-6 space-y-3">
+      <a href="#features" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">Features</a>
+      <a href="#how-it-works" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">How It Works</a>
+      <a href="#extension" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">Browser Extension</a>
+      <a href="#architecture" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">Architecture</a>
+      <a href="#engine" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">Engine</a>
+      <a href="#screenshots" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium text-zinc-300 hover:text-white hover:bg-zinc-800">Screenshots</a>
+      <div class="pt-3 border-t border-zinc-800 flex flex-col space-y-2">
+        <a href="https://github.com/kmanisk/rilo/releases/latest/download/rilo.exe" class="w-full text-center py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-md">Download Rilo.exe</a>
+        <a href="https://github.com/kmanisk/rilo" target="_blank" rel="noopener noreferrer" class="w-full text-center py-2 rounded-lg bg-zinc-800 text-zinc-300 font-medium border border-zinc-700">View on GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="pt-24 pb-16">
+
+    <!-- ========================================== -->
+    <!-- HERO SECTION                               -->
+    <!-- ========================================== -->
+    <section class="relative pt-12 pb-20 overflow-hidden">
+      <!-- Glow ambient backdrop -->
+      <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-indigo-600/15 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        
+        <!-- Pill Badge -->
+        <div class="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-400 mb-6 animate-fade-in">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+          <span>Native Windows Download Manager · Open Source</span>
+        </div>
+
+        <!-- Main Title -->
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight max-w-4xl mx-auto leading-tight sm:leading-none">
+          Download faster. <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-200 bg-clip-text text-transparent">Stay in full control.</span>
+        </h1>
+
+        <!-- Supporting Subtitle -->
+        <p class="mt-6 text-lg sm:text-xl text-zinc-400 max-w-2xl mx-auto font-normal leading-relaxed">
+          Rilo is a native Windows download manager powered by a multi-connection Rust engine with pause & resume, download scheduling, rate limits, SQLite persistence, and Chrome/Firefox link catching.
+        </p>
+
+        <!-- CTA Buttons -->
+        <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a href="https://github.com/kmanisk/rilo/releases/latest/download/rilo.exe" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2.5 px-7 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white text-base shadow-xl shadow-indigo-600/25 transition-all hover:scale-[1.02]">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span>Download Rilo v1.0</span>
+          </a>
+          <a href="https://github.com/kmanisk/rilo" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 font-medium text-zinc-300 text-base border border-zinc-700/80 transition-all hover:text-white">
+            <svg class="w-5 h-5 fill-current text-zinc-400" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+            <span>View on GitHub</span>
+          </a>
+        </div>
+
+        <!-- System Requirements Spec -->
+        <p class="mt-4 text-xs font-mono text-zinc-500">
+          Windows 10 / 11 (x64) · MIT License · Self-Contained Executable
+        </p>
+
+        <!-- Hero Screenshot Centerpiece Frame -->
+        <div class="mt-14 max-w-5xl mx-auto relative group">
+          <div class="absolute -inset-1 bg-gradient-to-r from-indigo-500/30 via-purple-500/20 to-indigo-500/30 rounded-2xl blur-xl opacity-70 group-hover:opacity-100 transition-opacity"></div>
+          <div class="relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl">
+            <!-- Window Titlebar Mock -->
+            <div class="bg-zinc-900 px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between select-none">
+              <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+              </div>
+              <span class="text-xs font-mono text-zinc-400 font-medium">Rilo Desktop Manager</span>
+              <div class="w-12"></div>
+            </div>
+            <!-- Main Desktop Image -->
+            <img src="assets/screenshots/img.png" alt="Rilo Desktop Application Interface" class="w-full h-auto object-cover cursor-zoom-in lightbox-trigger" data-title="Rilo Desktop Download Manager" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- FEATURES GRID SECTION                      -->
+    <!-- ========================================== -->
+    <section id="features" class="py-20 border-t border-zinc-800/60 bg-zinc-950/50 relative">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 mb-2">Capabilities</h2>
+          <p class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Everything you need to manage downloads.</p>
+          <p class="mt-3 text-base text-zinc-400">Designed for reliability, speed, and clean user experience without bloat.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          
+          <!-- Feature 1 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Multi-Connection Acceleration</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Splits large files across multiple dynamic HTTP Range chunks to maximize bandwidth throughput and connection speeds.
+            </p>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Pause & Resume</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Pause active downloads at any point and resume seamlessly from persisted byte progress without restarting from zero.
+            </p>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Browser Integration</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Route downloads directly from Chrome and Firefox into Rilo via WebExtensions Manifest V3 and Windows Native Messaging.
+            </p>
+          </div>
+
+          <!-- Feature 4 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Speed Limiting</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Control download bandwidth per task or globally using a token-bucket rate limiter to prevent network congestion.
+            </p>
+          </div>
+
+          <!-- Feature 5 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Download Scheduler</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Configure daily or time-based automated download queues and post-completion actions like system sleep or shutdown.
+            </p>
+          </div>
+
+          <!-- Feature 6 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">SQLite Persistence</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Download history, part ranges, HTTP headers, and metadata are safely stored in SQLite to survive app restarts.
+            </p>
+          </div>
+
+          <!-- Feature 7 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Automatic Retry System</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Automatically recovers interrupted connections or transient server errors using configurable exponential backoff.
+            </p>
+          </div>
+
+          <!-- Feature 8 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Clipboard & Batch Import</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Instant URL paste button with automatic URL extraction from surrounding plain text while preserving tokens and signatures.
+            </p>
+          </div>
+
+          <!-- Feature 9 -->
+          <div class="p-6 rounded-xl bg-zinc-900/60 border border-zinc-800 hover:border-indigo-500/40 transition-all hover:bg-zinc-900 group">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002 2V8m-9 4h4" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-white mb-2">Archive Extraction</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Extracts completed <code class="font-mono text-indigo-300">.zip</code>, <code class="font-mono text-indigo-300">.tar.gz</code>, <code class="font-mono text-indigo-300">.7z</code>, <code class="font-mono text-indigo-300">.bz2</code>, and <code class="font-mono text-indigo-300">.xz</code> files with Zip-Slip path traversal protection.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- HOW IT WORKS SECTION                       -->
+    <!-- ========================================== -->
+    <section id="how-it-works" class="py-20 border-t border-zinc-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 mb-2">Workflow</h2>
+          <p class="text-3xl sm:text-4xl font-bold text-white tracking-tight">How Rilo handles downloads.</p>
+          <p class="mt-3 text-base text-zinc-400">From link capture to final file verification in four simple steps.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          <!-- Step 1 -->
+          <div class="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <span class="text-3xl font-extrabold font-mono text-indigo-500/40">01</span>
+              <h3 class="text-lg font-semibold text-white mt-2 mb-2">Find a File</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                Click a download link in Chrome/Firefox or paste a URL directly into Rilo's desktop input dialog.
+              </p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-zinc-800 text-xs font-mono text-zinc-400">
+              WebExtension / Clipboard
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <span class="text-3xl font-extrabold font-mono text-indigo-500/40">02</span>
+              <h3 class="text-lg font-semibold text-white mt-2 mb-2">Rilo Receives It</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                Native messaging passes the request directly to Rilo, automatically launching the app if closed.
+              </p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-zinc-800 text-xs font-mono text-zinc-400">
+              Windows Native Host IPC
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <span class="text-3xl font-extrabold font-mono text-indigo-500/40">03</span>
+              <h3 class="text-lg font-semibold text-white mt-2 mb-2">Rust Engine Executes</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                Tokio async workers probe HTTP headers, split ranges into parallel connections, and write chunks safely.
+              </p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-zinc-800 text-xs font-mono text-zinc-400">
+              Multi-Segment Rust Engine
+            </div>
+          </div>
+
+          <!-- Step 4 -->
+          <div class="relative p-6 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col justify-between">
+            <div>
+              <span class="text-3xl font-extrabold font-mono text-indigo-500/40">04</span>
+              <h3 class="text-lg font-semibold text-white mt-2 mb-2">File Complete</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                Segments are merged into the final file, logged in SQLite, and optional post-actions (extract, notify) trigger.
+              </p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-zinc-800 text-xs font-mono text-zinc-400">
+              SQLite + Disk Persistence
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- BROWSER EXTENSION SECTION                  -->
+    <!-- ========================================== -->
+    <section id="extension" class="py-20 border-t border-zinc-800/60 bg-zinc-950/50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          
+          <!-- Text Content -->
+          <div class="lg:col-span-6 space-y-6">
+            <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-xs font-mono font-semibold text-purple-400">
+              <span>WebExtension Manifest V3</span>
+            </div>
+            <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Send downloads straight to Rilo.</h2>
+            <p class="text-base text-zinc-400 leading-relaxed">
+              Install the lightweight Rilo browser extension for Chrome or Firefox. When link catching is enabled, downloads are intercepted automatically and routed into Rilo's high-speed download engine.
+            </p>
+
+            <!-- Extension Features List -->
+            <ul class="space-y-3 text-sm text-zinc-300 font-medium">
+              <li class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Primary <strong>Catch Links</strong> toggle switch with compact ~320px popup UI</span>
+              </li>
+              <li class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Right-click <strong>"Download with Rilo"</strong> context menu on any link</span>
+              </li>
+              <li class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Zero background polling — communicates via standard Windows Native Messaging</span>
+              </li>
+              <li class="flex items-center space-x-3">
+                <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Auto-launches Rilo desktop process if application is closed</span>
+              </li>
+            </ul>
+
+            <div class="pt-4 flex flex-wrap items-center gap-3">
+              <a href="https://github.com/kmanisk/rilo#browser-extension-setup" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 font-semibold text-white text-sm border border-zinc-700/80 transition-all">
+                <span>Chrome / Firefox Setup Guide</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Screenshot Frame -->
+          <div class="lg:col-span-6 flex justify-center">
+            <div class="relative max-w-md w-full rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-2xl p-2">
+              <img src="assets/screenshots/extension.png" alt="Rilo Browser Extension Interface" class="w-full h-auto rounded-lg object-contain cursor-zoom-in lightbox-trigger" data-title="Rilo WebExtension Popup UI" />
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- ARCHITECTURE SECTION                       -->
+    <!-- ========================================== -->
+    <section id="architecture" class="py-20 border-t border-zinc-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 mb-2">Technical Blueprint</h2>
+          <p class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Built for performance and reliability.</p>
+          <p class="mt-3 text-base text-zinc-400">Decoupled architecture connecting browser WebExtensions to a native Rust engine.</p>
+        </div>
+
+        <!-- Architecture Interactive Flow Map -->
+        <div class="p-8 rounded-2xl bg-zinc-900/80 border border-zinc-800 mb-12 shadow-xl">
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-4 text-center">
+            
+            <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 flex flex-col justify-center">
+              <span class="text-xs font-mono text-indigo-400 font-bold uppercase mb-1">Browser Layer</span>
+              <span class="text-sm font-semibold text-white">Chrome / Firefox</span>
+              <span class="text-[11px] text-zinc-400 font-mono mt-1">WebExtension MV3</span>
+            </div>
+
+            <div class="hidden md:flex items-center justify-center text-zinc-600 font-mono text-lg font-bold">➔</div>
+
+            <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 flex flex-col justify-center">
+              <span class="text-xs font-mono text-purple-400 font-bold uppercase mb-1">Native Bridge</span>
+              <span class="text-sm font-semibold text-white">rilo.exe --native-host</span>
+              <span class="text-[11px] text-zinc-400 font-mono mt-1">Length-Prefixed Standard I/O</span>
+            </div>
+
+            <div class="hidden md:flex items-center justify-center text-zinc-600 font-mono text-lg font-bold">➔</div>
+
+            <div class="p-4 rounded-lg bg-zinc-950 border border-indigo-500/40 flex flex-col justify-center">
+              <span class="text-xs font-mono text-emerald-400 font-bold uppercase mb-1">Core Desktop Engine</span>
+              <span class="text-sm font-semibold text-white">Rust + Tokio Runtime</span>
+              <span class="text-[11px] text-zinc-400 font-mono mt-1">Multi-Segment HTTP + SQLite</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Stack Tech Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 font-mono text-xs">
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Frontend UI</span>
+            <span class="font-bold text-white text-sm">Preact + TS</span>
+          </div>
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Desktop App</span>
+            <span class="font-bold text-white text-sm">Tauri v2</span>
+          </div>
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Async Runtime</span>
+            <span class="font-bold text-white text-sm">Rust Tokio</span>
+          </div>
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Database</span>
+            <span class="font-bold text-white text-sm">SQLite</span>
+          </div>
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Networking</span>
+            <span class="font-bold text-white text-sm">HTTP Range</span>
+          </div>
+          <div class="p-4 rounded-lg bg-zinc-900 border border-zinc-800 text-center">
+            <span class="block text-zinc-400 font-sans mb-1">Browser Protocol</span>
+            <span class="font-bold text-white text-sm">Native Messaging</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- DOWNLOAD ENGINE CONCEPT SECTION            -->
+    <!-- ========================================== -->
+    <section id="engine" class="py-20 border-t border-zinc-800/60 bg-zinc-950/50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 mb-2">Engine Mechanics</h2>
+          <p class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Why Rilo is fast & resilient.</p>
+          <p class="mt-3 text-base text-zinc-400">Understanding multi-segment HTTP chunking and dynamic range allocation.</p>
+        </div>
+
+        <!-- 6-Stage Pipeline Graphic -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">1</span>
+            <h4 class="text-sm font-semibold text-white">Probe</h4>
+            <p class="text-xs text-zinc-400 mt-1">HTTP HEAD request inspects Content-Length & Accept-Ranges headers.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">2</span>
+            <h4 class="text-sm font-semibold text-white">Plan</h4>
+            <p class="text-xs text-zinc-400 mt-1">Determines connection pool size (1 to 32 parallel threads).</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">3</span>
+            <h4 class="text-sm font-semibold text-white">Segment</h4>
+            <p class="text-xs text-zinc-400 mt-1">Splits file into balanced byte ranges (e.g. Range: bytes=0-1048575).</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">4</span>
+            <h4 class="text-sm font-semibold text-white">Stream</h4>
+            <p class="text-xs text-zinc-400 mt-1">Async Tokio workers write chunks concurrently to pre-allocated file target.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">5</span>
+            <h4 class="text-sm font-semibold text-white">Persist</h4>
+            <p class="text-xs text-zinc-400 mt-1">SQLite commits segment state continuously to enable pause & crash recovery.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
+            <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono text-xs font-bold inline-flex items-center justify-center mb-2">6</span>
+            <h4 class="text-sm font-semibold text-white">Complete</h4>
+            <p class="text-xs text-zinc-400 mt-1">Final byte verification, segment cleanup, and optional post-download extraction.</p>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SCREENSHOT GALLERY SECTION                 -->
+    <!-- ========================================== -->
+    <section id="screenshots" class="py-20 border-t border-zinc-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="text-center max-w-3xl mx-auto mb-16">
+          <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400 mb-2">Gallery</h2>
+          <p class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Screenshots & Visuals</p>
+          <p class="mt-3 text-base text-zinc-400">Click any image to view in high resolution.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Image 1 -->
+          <div class="group relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-lg cursor-pointer">
+            <img src="assets/screenshots/img.png" alt="Rilo Desktop Download Manager UI" class="w-full h-56 object-cover object-top group-hover:scale-105 transition-transform duration-300 lightbox-trigger" data-title="Rilo Desktop Download Manager Main Interface" />
+            <div class="p-4 bg-zinc-900 border-t border-zinc-800">
+              <h4 class="text-sm font-semibold text-white">Desktop Download Manager</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">Dense card view, transfer stats, toolbar & sidebar controls.</p>
+            </div>
+          </div>
+
+          <!-- Image 2 -->
+          <div class="group relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-lg cursor-pointer">
+            <img src="assets/screenshots/extension.png" alt="Rilo Browser Extension Popup" class="w-full h-56 object-cover object-top group-hover:scale-105 transition-transform duration-300 lightbox-trigger" data-title="Rilo WebExtension Popup Interface" />
+            <div class="p-4 bg-zinc-900 border-t border-zinc-800">
+              <h4 class="text-sm font-semibold text-white">Browser Extension UI</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">Compact popup with primary Catch Links toggle switch.</p>
+            </div>
+          </div>
+
+          <!-- Image 3 -->
+          <div class="group relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-lg cursor-pointer">
+            <img src="assets/screenshots/mermaid.png" alt="Rilo System Architecture Diagram" class="w-full h-56 object-cover object-center group-hover:scale-105 transition-transform duration-300 lightbox-trigger" data-title="Rilo System Architecture Flowchart" />
+            <div class="p-4 bg-zinc-900 border-t border-zinc-800">
+              <h4 class="text-sm font-semibold text-white">System Architecture</h4>
+              <p class="text-xs text-zinc-400 mt-0.5">Browser extension, native messaging, Tauri, Rust & SQLite.</p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- OPEN SOURCE SECTION                        -->
+    <!-- ========================================== -->
+    <section class="py-20 border-t border-zinc-800/60 bg-zinc-950/50">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        
+        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono font-semibold text-emerald-400 mb-4">
+          <span>MIT Licensed · Open Source</span>
+        </div>
+
+        <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight">Built completely in the open.</h2>
+        <p class="mt-4 text-base text-zinc-400 leading-relaxed max-w-2xl mx-auto">
+          Rilo is transparent, customizable, and free software. Inspect the code, submit issues, or contribute improvements directly on GitHub.
+        </p>
+
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <a href="https://github.com/kmanisk/rilo" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 font-semibold text-white text-sm border border-zinc-700 transition-all">
+            <svg class="w-4 h-4 fill-current text-zinc-300" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+            <span>GitHub Repository</span>
+          </a>
+          <a href="https://github.com/kmanisk/rilo/releases" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-2 px-6 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 font-semibold text-white text-sm border border-zinc-700 transition-all">
+            <span>View All Releases</span>
+          </a>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- FINAL DOWNLOAD CTA SECTION                 -->
+    <!-- ========================================== -->
+    <section class="py-24 border-t border-zinc-800 relative overflow-hidden">
+      <!-- Glow ambient backdrop -->
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        
+        <h2 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">Ready to try Rilo?</h2>
+        <p class="mt-4 text-lg text-zinc-400 max-w-xl mx-auto font-normal">
+          Download the latest self-contained Windows executable and start managing downloads with maximum speed.
+        </p>
+
+        <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a href="https://github.com/kmanisk/rilo/releases/latest/download/rilo.exe" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2.5 px-8 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white text-lg shadow-xl shadow-indigo-600/25 transition-all hover:scale-[1.02]">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span>Download Rilo v1.0 (Windows)</span>
+          </a>
+          <a href="https://github.com/kmanisk/rilo#browser-extension-setup" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 font-semibold text-zinc-300 text-lg border border-zinc-700/80 transition-all hover:text-white">
+            <span>Browser Extension</span>
+          </a>
+        </div>
+
+        <p class="mt-4 text-xs font-mono text-zinc-500">
+          rilo.exe · Self-Contained Desktop & Native Messaging Host
+        </p>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- FOOTER                                     -->
+  <!-- ========================================== -->
+  <footer class="bg-zinc-950 border-t border-zinc-800/80 py-12 text-sm text-zinc-400">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+      
+      <!-- Left Info -->
+      <div class="flex items-center space-x-3">
+        <img src="assets/logo.png" alt="Rilo Logo" class="w-6 h-6 rounded-md opacity-80" />
+        <span class="font-bold text-white">Rilo</span>
+        <span class="text-zinc-500">•</span>
+        <span>Fast, native downloads for Windows</span>
+      </div>
+
+      <!-- Footer Nav Links -->
+      <div class="flex flex-wrap items-center justify-center gap-6 font-medium">
+        <a href="https://github.com/kmanisk/rilo" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub</a>
+        <a href="https://github.com/kmanisk/rilo/releases" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Releases</a>
+        <a href="https://github.com/kmanisk/rilo#browser-extension-setup" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">Extension</a>
+        <a href="https://github.com/kmanisk/rilo/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">MIT License</a>
+      </div>
+
+      <!-- Right Copyright -->
+      <div class="text-xs font-mono text-zinc-500">
+        &copy; <span id="current-year">2026</span> kmanisk. Released under MIT.
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- LIGHTBOX MODAL -->
+  <div id="lightbox" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-300 flex items-center justify-center p-4" tabIndex="-1" role="dialog" aria-modal="true">
+    <div class="relative max-w-5xl w-full flex flex-col items-center">
+      <!-- Close Button -->
+      <button id="lightbox-close" class="absolute -top-12 right-0 p-2 text-zinc-400 hover:text-white focus:outline-none" aria-label="Close Lightbox">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      <!-- Image Display -->
+      <img id="lightbox-img" src="" alt="" class="max-h-[85vh] w-auto rounded-lg border border-zinc-800 shadow-2xl object-contain" />
+      <!-- Caption -->
+      <p id="lightbox-caption" class="mt-3 text-sm font-medium text-zinc-300 font-mono"></p>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="script.js"></script>
+</body>
+</html>

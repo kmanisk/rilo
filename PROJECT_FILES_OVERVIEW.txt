@@ -1,0 +1,244 @@
+================================================================================
+                       RILO DOWNLOAD MANAGER - FILE OVERVIEW
+================================================================================
+
+This document provides a comprehensive description of every core directory, 
+source file, component, backend module, and extension asset in the Rilo codebase.
+
+--------------------------------------------------------------------------------
+1. FRONTEND ARCHITECTURE (Preact + TypeScript + Tailwind) - [src/]
+--------------------------------------------------------------------------------
+
+• src/main.tsx
+  - The entry point for the Preact frontend.
+  - Mounts the root <App /> component into the DOM HTML element (#app).
+
+• src/App.tsx
+  - The main container component for the entire application.
+  - Manages global state: downloads list, active category filter, search query, 
+    selected item, active modals, and notification toasts.
+  - Registers Tauri real-time IPC event listeners ("download-progress", 
+    "extension-download", "extraction-progress").
+  - Handles global desktop keyboard shortcuts (Ctrl+N for New Download, 
+    Ctrl+F for Search, Space for Pause/Resume, Delete for Removal, Enter for Opening).
+  - Loads SQLite download history and persistent configuration on app launch.
+
+• src/App.css
+  - Centralized master CSS stylesheet and design system engine.
+  - Defines CSS variables for dark/light themes, accent color palettes 
+    (Indigo, Blue, Purple, Emerald, Orange, Rose), layout density spacing tokens, 
+    font family choices, line-height (1.45), antialiasing, scrollbars, and focus rings.
+
+• src/types.ts
+  - Core TypeScript type definitions and data models.
+  - Defines DownloadItem, DownloadSegment, DownloadProgressPayload, 
+    ExtractionProgressPayload, CategoryTab, AppConfig, and DownloadRecord interfaces.
+
+• src/utils.ts
+  - Utility helper functions used across the frontend.
+  - Includes formatBytes(), formatEta(), generateDeterministicSegments(), 
+    getCategoryFromFilename(), and filename sanitizers.
+
+• src/utils/cn.ts
+  - Classname utility helper combining clsx and tailwind-merge for dynamic CSS classes.
+
+• src/vite-env.d.ts
+  - TypeScript environment definitions for Vite.
+
+--------------------------------------------------------------------------------
+2. FRONTEND COMPONENTS - [src/components/]
+--------------------------------------------------------------------------------
+
+• src/components/Toolbar.tsx
+  - Top action toolbar of the desktop application.
+  - Contains quick-action buttons: + Add Task, Resume, Pause, Stop, Delete, 
+    Open Folder, Details Inspector, Clean Finished, Scheduler, Settings, and Search Input.
+
+• src/components/Sidebar.tsx
+  - Left navigation sidebar.
+  - Renders category sections: All Downloads, Downloading, Queued, Paused, Completed, 
+    Failed, file type categories (Videos, Music, Documents, Programs, Archives, Images, Other), 
+    status counters, and expandable navigation trees.
+
+• src/components/DownloadGrid.tsx
+  - Main download list container component.
+  - Maps active and completed download records into dense card views and handles 
+    right-click context menu events.
+
+• src/components/DownloadCard.tsx
+  - Individual download card item component.
+  - Renders filename, save path, transfer speed, percentage, ETA, thread count, 
+    resumability badge, segmented progress bar, and card action buttons.
+
+• src/components/UnifiedSegmentProgressBar.tsx
+  - High-performance multi-segment visual progress bar.
+  - Displays dynamic byte ranges, connection chunks, and active downloading 
+    segments in real time.
+
+• src/components/StatusBadge.tsx
+  - Status badge component rendering colored status indicators (Downloading, Paused, 
+    Queued, Completed, Error, Extracting) with active thread numbers.
+
+• src/components/StatusBar.tsx
+  - Bottom application status bar displaying global transfer speed, active task 
+    counts, queued tasks, and ready state.
+
+• src/components/NewDownloadModal.tsx
+  - Add Download dialog modal.
+  - Provides URL input, clipboard paste button [ 📋 ] with plain-text URL extraction, 
+    custom save folder browser, connection thread count selector (1-32), and auto-extract options.
+
+• src/components/DownloadDetailsModal.tsx
+  - Floating Download Details Inspector window component.
+  - Shows real-time per-segment progress, byte range chunks, thread transfer speeds, 
+    HTTP response headers, ETag, MIME type, and file checksums.
+
+• src/components/DetailsStandaloneView.tsx
+  - Standalone inspector component used when opening details in an independent window.
+
+• src/components/SettingsModal.tsx
+  - Application preferences dialog.
+  - Manages General settings (download path, max concurrent downloads, default threads, 
+    retry policy), Queue Scheduler settings, and Appearance settings (light/dark theme, 
+    font family selection, baseline font size stepper 12px-20px, density selector, accent colors).
+
+• src/components/SchedulerModal.tsx
+  - Queue Scheduler modal for setting daily automated start/stop times and post-download 
+    completion actions (None, Notification, Sleep, Shutdown).
+
+• src/components/CompletionDialog.tsx
+  - Post-download completion popup window offering options to open the file, 
+    reveal in folder, or execute scheduled system actions.
+
+• src/components/ContextMenu.tsx
+  - Custom desktop right-click context menu for download items (Open File, Reveal Folder, 
+    Pause, Resume, Refresh Link, Copy URL, Remove Task, Delete File from Disk).
+
+• src/components/DeleteConfirmationModal.tsx
+  - Safety confirmation modal for permanently deleting files from disk.
+
+• src/components/UpdateUrlModal.tsx
+  - Refresh Expired Link dialog for updating expired HTTP download tokens/URLs while 
+    preserving downloaded byte progress.
+
+• src/components/AboutModal.tsx
+  - About dialog displaying Rilo version 1.0.0, technology stack details, logo, and license.
+
+• src/components/SegmentProgressView.tsx
+  - Detailed segment progress table component.
+
+• src/components/common/ & UI Primitives [src/components/ui/]:
+  - Reusable primitive components (Button.tsx, Input.tsx, Select.tsx, Switch.tsx, 
+    Tabs.tsx, Dialog.tsx, Dropdown.tsx, Popover.tsx, Separator.tsx, Tooltip.tsx, Badge.tsx).
+
+--------------------------------------------------------------------------------
+3. BACKEND RUST & TAURI CORE - [src-tauri/]
+--------------------------------------------------------------------------------
+
+• src-tauri/src/main.rs
+  - Application binary entry point.
+  - Suppresses extra Windows console window in release builds and calls downloader_lib::run().
+
+• src-tauri/src/lib.rs
+  - Core Rust library entry point.
+  - Implements dual-mode execution: checks for "--native-host" argument to launch 
+    native messaging host mode or proceeds to launch Tauri GUI mode.
+  - Registers tauri-plugin-single-instance to prevent duplicate GUI processes.
+  - Configures system tray icon and context menu.
+  - Initializes SQLite database and DownloadManager state.
+
+• src-tauri/src/commands/mod.rs
+  - Tauri IPC command bridge exposing Rust engine functions to Preact frontend:
+    start_download, pause_download, resume_download, cancel_download, 
+    delete_download_file, get_app_config, update_app_config, open_file, 
+    open_folder_location, extract_archive, execute_system_action, open_details_window.
+
+• src-tauri/src/native_host/mod.rs
+  - WebExtension Native Messaging protocol implementation (run_native_host).
+  - Handles 4-byte length-prefixed JSON stdin/stdout communication for Chrome & Firefox.
+  - Enforces 1 MB safe message size limit, validates URL schemes (HTTP/HTTPS only), 
+    sanitizes filenames, and registers Windows Registry keys (HKCU\Software\Google\Chrome\...).
+  - Forwards incoming browser extension download requests to local IPC server (127.0.0.1:7899).
+
+• src-tauri/src/config/mod.rs
+  - AppConfig settings model and atomic JSON file manager (%APPDATA%\downloader\config.json).
+  - Validates and clamps configuration values (max concurrent downloads 1-16, 
+    max connections 1-32, baseline font size 12-20px).
+
+• src-tauri/src/db/ & src-tauri/src/core/db/
+  - SQLite database persistence engine (downloads.db).
+  - Manages database schemas, download history, byte progress, part ranges, headers, 
+    and key-value settings.
+
+• src-tauri/src/download/
+  - manager.rs: Core DownloadManager controlling active tasks and connection state.
+  - worker.rs: Async download execution worker. Performs HTTP Range probes, splits files 
+    into dynamic byte ranges, pools connections, streams data, and broadcasts real-time progress.
+
+• src-tauri/src/core/archive/
+  - Archive extraction module supporting .zip, .tar.gz, .7z, .bz2, and .xz formats.
+  - Implements Zip-Slip security protection against path traversal attacks.
+
+• src-tauri/src/core/server/browser_server.rs
+  - Local HTTP server listening on 127.0.0.1:7899 to receive download payloads 
+    from the Native Messaging mode or browser extension.
+
+• src-tauri/src/core/queue/
+  - Queue manager and automated time-based scheduler logic.
+
+• src-tauri/src/core/connection/
+  - HTTP client builder, Range probing, rate limiting, and connection handling.
+
+• src-tauri/src/core/destination/
+  - Multi-part file writer, merger, and filename sanitizer.
+
+• src-tauri/tauri.conf.json
+  - Tauri v2 configuration file defining application bundle parameters, window geometry, 
+    icons, and frontend dist path (../dist).
+
+• src-tauri/Cargo.toml & Cargo.lock
+  - Rust package manifest and locked dependency tree.
+
+--------------------------------------------------------------------------------
+4. BROWSER EXTENSION - [rilo-extension/]
+--------------------------------------------------------------------------------
+
+• rilo-extension/manifest.json
+  - WebExtension Manifest V3 specification file for Chrome and Firefox.
+
+• rilo-extension/background/service-worker.js
+  - Extension background service worker. Intercepts link clicks, manages "Catch Links" 
+    setting state, and sends native messaging requests (com.rilo.downloader).
+
+• rilo-extension/popup/ (index.html, popup.js, popup.css)
+  - Compact 320px extension popup UI with primary Catch Links toggle switch.
+
+• rilo-extension/native-host/
+  - Chrome & Firefox Native Messaging Host JSON manifests pointing directly to rilo.exe.
+
+--------------------------------------------------------------------------------
+5. ROOT & DOCUMENTATION FILES
+--------------------------------------------------------------------------------
+
+• README.md
+  - Project documentation featuring system architecture diagram and feature overview.
+
+• LICENSE
+  - MIT Open Source License.
+
+• package.json & pnpm-lock.yaml
+  - Node.js project manifest and pnpm dependency lockfile.
+
+• vite.config.ts
+  - Vite build configuration with Preact compat aliases and Tauri dev server settings.
+
+• tailwind.config.js & postcss.config.js
+  - Tailwind CSS design system configuration.
+
+• tsconfig.json
+  - TypeScript compiler settings.
+
+• docs/images/
+  - Application UI screenshots and system architecture diagrams (img.png, extension.png, mermaid.png).
+
+================================================================================
