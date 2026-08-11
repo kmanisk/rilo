@@ -6,7 +6,7 @@ interface AboutModalProps {
 
 export default function AboutModal({ onClose }: AboutModalProps) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 select-none font-sans">
+    <div className="fixed inset-0 z-50 bg-rilo-overlay backdrop-blur-xs flex items-center justify-center p-4 select-none font-sans">
       <div className="bg-rilo-surface border border-rilo-border rounded-xl max-w-md w-full shadow-2xl p-5 space-y-4">
         <div className="flex items-center space-x-3 border-b border-rilo-border pb-3">
           <img src="/favicon-32x32.png" alt="Rilo Logo" className="w-10 h-10 object-contain flex-shrink-0 drop-shadow-md" />

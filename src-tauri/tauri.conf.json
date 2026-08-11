@@ -15,8 +15,9 @@
         "title": "Rilo",
         "width": 1180,
         "height": 720,
-        "minWidth": 1100,
-        "minHeight": 650
+        "minWidth": 900,
+        "minHeight": 550,
+        "decorations": false
       }
     ],
     "security": {

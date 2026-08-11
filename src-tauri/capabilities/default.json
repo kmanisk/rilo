@@ -1,11 +1,33 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "description": "Capability for application windows",
+  "windows": [
+    "main",
+    "rilo-test-window",
+    "rilo-download-details-*",
+    "rilo-completion-*",
+    "details_*"
+  ],
   "permissions": [
     "core:default",
     "opener:default",
-    "dialog:default"
+    "dialog:default",
+    "drag:default",
+    "core:webview:allow-create-webview-window",
+    "core:webview:allow-create-webview",
+    "core:window:allow-center",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-unminimize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-close"
   ]
 }
+
+

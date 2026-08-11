@@ -22,7 +22,7 @@ export function Dialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 font-sans select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 font-sans select-none">
       <div
         className={cn(
           "bg-rilo-surface border border-rilo-border rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]",

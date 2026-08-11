@@ -84,11 +84,11 @@ impl Default for SchedulerConfig {
 impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
-            theme: "dark".to_string(),
+            theme: "rilo-default".to_string(),
             accent_color: "indigo".to_string(),
             font_family: "Inter".to_string(),
             font_size: "Default".to_string(),
-            font_size_px: 14,
+            font_size_px: 15,
             density: "Comfortable".to_string(),
         }
     }
@@ -119,17 +119,18 @@ impl AppConfig {
         }
 
         // Appearance Validation
-        let valid_themes = ["dark", "light"];
-        if !valid_themes.contains(&self.appearance.theme.as_str()) {
-            self.appearance.theme = "dark".to_string();
+        if self.appearance.theme.is_empty() || self.appearance.theme == "dark" {
+            self.appearance.theme = "rilo-default".to_string();
+        } else if self.appearance.theme == "light" {
+            self.appearance.theme = "github-light".to_string();
         }
 
-        let valid_accents = ["indigo", "blue", "purple", "green", "orange", "red"];
+        let valid_accents = ["indigo", "blue", "purple", "emerald", "green", "orange", "rose", "red"];
         if !valid_accents.contains(&self.appearance.accent_color.to_lowercase().as_str()) {
             self.appearance.accent_color = "indigo".to_string();
         }
 
-        let valid_fonts = ["Inter", "Geist", "IBM Plex Sans", "System"];
+        let valid_fonts = ["Inter", "Geist", "IBM Plex Sans", "JetBrains Mono", "Iosevka", "Roboto", "System"];
         if !valid_fonts.contains(&self.appearance.font_family.as_str()) {
             self.appearance.font_family = "Inter".to_string();
         }
@@ -140,13 +141,13 @@ impl AppConfig {
         }
 
         if self.appearance.font_size_px == 0 {
-            self.appearance.font_size_px = 14;
+            self.appearance.font_size_px = 15;
         }
         self.appearance.font_size_px = self.appearance.font_size_px.clamp(12, 20);
 
-        let valid_densities = ["Compact", "Comfortable", "Spacious"];
+        let valid_densities = ["compact", "comfortable", "spacious", "Compact", "Comfortable", "Spacious"];
         if !valid_densities.contains(&self.appearance.density.as_str()) {
-            self.appearance.density = "Comfortable".to_string();
+            self.appearance.density = "comfortable".to_string();
         }
     }
 
@@ -236,9 +237,9 @@ mod tests {
         assert_eq!(config.version, 1);
         assert_eq!(config.download.max_concurrent_downloads, 4);
         assert_eq!(config.download.max_connections_per_download, 4);
-        assert_eq!(config.appearance.theme, "dark");
+        assert_eq!(config.appearance.theme, "rilo-default");
         assert_eq!(config.appearance.font_family, "Inter");
-        assert_eq!(config.appearance.font_size_px, 14);
+        assert_eq!(config.appearance.font_size_px, 15);
     }
 
     #[test]
@@ -248,7 +249,7 @@ mod tests {
         config.download.max_connections_per_download = 0;
         config.download.retry_count = 100;
         config.scheduler.start_time = "invalid_time".to_string();
-        config.appearance.theme = "neon".to_string();
+        config.appearance.theme = "".to_string();
         config.appearance.font_size_px = 50;
 
         config.validate();
@@ -257,7 +258,7 @@ mod tests {
         assert_eq!(config.download.max_connections_per_download, 1);
         assert_eq!(config.download.retry_count, 10);
         assert_eq!(config.scheduler.start_time, "22:00");
-        assert_eq!(config.appearance.theme, "dark");
+        assert_eq!(config.appearance.theme, "rilo-default");
         assert_eq!(config.appearance.font_size_px, 20);
     }
 

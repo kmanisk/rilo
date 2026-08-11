@@ -14,11 +14,11 @@ export default function StatusBar({
   pausedCount,
 }: StatusBarProps) {
   return (
-    <footer className="bg-rilo-surface border-t border-rilo-border px-3 py-1 flex items-center justify-between text-[11px] font-mono text-rilo-secondary select-none flex-shrink-0">
+    <footer className="bg-rilo-surface border-t border-rilo-border px-3 py-1 flex items-center justify-between text-xs font-mono text-rilo-secondary select-none flex-shrink-0">
       <div className="flex items-center space-x-2 tabular-nums">
         {downloadingCount > 0 ? (
           <>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-rilo-success animate-pulse" />
             <span className="text-rilo-primary font-semibold">{downloadingCount} downloading</span>
             <span className="text-rilo-muted">•</span>
             <span className="text-rilo-accent font-bold">{formatBytes(totalSpeedBps)}/s total</span>
@@ -31,7 +31,7 @@ export default function StatusBar({
           </>
         ) : queuedCount > 0 ? (
           <>
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="w-2 h-2 rounded-full bg-rilo-warning" />
             <span className="text-rilo-primary">{queuedCount} queued</span>
             {pausedCount > 0 && (
               <>

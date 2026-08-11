@@ -561,29 +561,123 @@ pub async fn cancel_system_shutdown() -> Result<(), String> {
 #[tauri::command]
 pub async fn open_details_window(
     app: AppHandle,
+    state: State<'_, DownloadManager>,
     download_id: String,
     title: String,
 ) -> Result<(), String> {
+    if let Some(ref db) = state.db {
+        if let Ok(records) = db.get_all() {
+            if !records.iter().any(|r| r.id == download_id) {
+                return Err("Download is no longer available".to_string());
+            }
+        }
+    }
+
     let clean_id = download_id.replace(['-', ' '], "_");
-    let label = format!("details_{}", clean_id);
+    let label = format!("rilo-download-details-{}", clean_id);
 
     if let Some(existing_win) = app.get_webview_window(&label) {
         let _ = existing_win.show();
+        let _ = existing_win.unminimize();
         let _ = existing_win.set_focus();
         return Ok(());
     }
 
-    let url = format!("index.html?details_id={}", download_id);
+    let url = format!("index.html?window=details&details_id={}", download_id);
     let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
-        .title(format!("Rilo — Download Details — {}", title))
-        .inner_size(740.0, 580.0)
-        .min_inner_size(620.0, 480.0)
+        .title(format!("Download Details — {}", title))
+        .inner_size(560.0, 440.0)
+        .min_inner_size(480.0, 340.0)
+        .decorations(false)
+        .visible(false)
+        .center()
         .resizable(true)
         .focused(true);
 
     builder.build().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_completion_window(
+    app: AppHandle,
+    download_id: String,
+    title: Option<String>,
+) -> Result<(), String> {
+    let clean_id = download_id.replace(['-', ' '], "_");
+    let label = format!("rilo-completion-{}", clean_id);
+
+    if let Some(existing_win) = app.get_webview_window(&label) {
+        let _ = existing_win.show();
+        let _ = existing_win.unminimize();
+        let _ = existing_win.set_focus();
+        return Ok(());
+    }
+
+    let url = format!("index.html?window=completion&completion_id={}", download_id);
+    let window_title = format!("Completed — {}", title.unwrap_or_else(|| download_id.clone()));
+    let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title(window_title)
+        .inner_size(460.0, 260.0)
+        .min_inner_size(420.0, 220.0)
+        .decorations(false)
+        .visible(false)
+        .center()
+        .resizable(true)
+        .focused(true);
+
+    builder.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_test_window(app: AppHandle) -> Result<(), String> {
+    let label = "rilo-test-window";
+
+    if let Some(existing_win) = app.get_webview_window(label) {
+        let _ = existing_win.show();
+        let _ = existing_win.unminimize();
+        let _ = existing_win.set_focus();
+        return Ok(());
+    }
+
+    let url = "index.html?window=test";
+    let builder = tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App(url.into()))
+        .title("Test Window")
+        .inner_size(600.0, 420.0)
+        .min_inner_size(460.0, 320.0)
+        .decorations(false)
+        .visible(false)
+        .center()
+        .resizable(true)
+        .focused(true);
+
+    builder.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_file_drag(app: AppHandle, file_path: String) -> Result<(), String> {
+    let path_buf = std::path::PathBuf::from(&file_path);
+    if !path_buf.exists() {
+        return Err("File does not exist on disk".to_string());
+    }
+
+    if let Some(window) = app.get_webview_window("main").or_else(|| app.webview_windows().values().next().cloned()) {
+        let _ = drag::start_drag(
+            &window,
+            drag::DragItem::Files(vec![path_buf]),
+            drag::Image::Raw(vec![]),
+            |_result, _pos| {},
+            drag::Options::default(),
+        );
+    }
+
+    Ok(())
+}
+
+
+
 
 
 

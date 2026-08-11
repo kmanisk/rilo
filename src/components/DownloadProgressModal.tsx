@@ -72,7 +72,7 @@ export default function DownloadProgressModal({
   }, [item.status]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-4 select-none font-sans animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-3 sm:p-4 select-none font-sans animate-in fade-in duration-150">
       <div className="bg-rilo-surface border border-rilo-border rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
         {/* Header Titlebar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-rilo-border bg-rilo-surface">

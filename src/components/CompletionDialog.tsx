@@ -67,7 +67,7 @@ export default function CompletionDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 select-none font-sans animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-4 select-none font-sans animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isShutdown) onClose();
       }}

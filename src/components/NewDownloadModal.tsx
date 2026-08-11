@@ -149,7 +149,7 @@ export default function NewDownloadModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-fadeIn font-sans">
+    <div className="fixed inset-0 z-50 bg-rilo-overlay backdrop-blur-xs flex items-center justify-center p-4 select-none animate-fadeIn font-sans">
       <div className="bg-rilo-surface border border-rilo-border rounded-xl max-w-lg w-full shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-rilo-surface border-b border-rilo-border px-5 py-3.5 flex items-center justify-between">

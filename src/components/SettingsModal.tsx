@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'preact/hooks';
 import { invoke } from '@tauri-apps/api/core';
+import { emit } from '@tauri-apps/api/event';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
 import { Checkbox } from './ui/Checkbox';
+import { AppearanceSettings, applyVisualSettings } from '../lib/settings/visual';
+import { riloThemes } from '../lib/themes/themes';
 import { Download, CalendarClock, Palette, X, RotateCcw, Check } from 'lucide-preact';
 
 export interface AppConfig {
@@ -25,14 +28,7 @@ export interface AppConfig {
     stop_time: string;
     post_download_action: string;
   };
-  appearance: {
-    theme: string;
-    accent_color: string;
-    font_family: string;
-    font_size: string;
-    font_size_px: number;
-    density: string;
-  };
+  appearance: AppearanceSettings;
 }
 
 interface SettingsModalProps {
@@ -42,98 +38,53 @@ interface SettingsModalProps {
   setTheme: (t: 'dark' | 'light') => void;
 }
 
-export function applyVisualSettings(config: AppConfig['appearance']) {
-  const root = document.documentElement;
-  const theme = config.theme || 'dark';
-  const accent = (config.accent_color || 'indigo').toLowerCase();
-  const font = config.font_family || 'Inter';
-  const density = (config.density || 'comfortable').toLowerCase();
-  const fontSizePx = config.font_size_px || 14;
-
-  root.setAttribute('data-theme', theme);
-  root.setAttribute('data-accent', accent);
-  root.setAttribute('data-font', font);
-  root.setAttribute('data-density', density);
-
-  if (theme === 'light') {
-    root.classList.remove('dark');
-    root.classList.add('light');
-  } else {
-    root.classList.remove('light');
-    root.classList.add('dark');
-  }
-
-  let fontStyle = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif';
-  switch (font) {
-    case 'IBM Plex Sans':
-      fontStyle = '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      break;
-    case 'JetBrains Mono':
-      fontStyle = '"JetBrains Mono", "Cascadia Code", "Consolas", "Courier New", monospace';
-      break;
-    case 'Iosevka':
-      fontStyle = '"Iosevka", "Cascadia Mono", "Consolas", "Courier New", monospace';
-      break;
-    case 'Roboto':
-      fontStyle = '"Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      break;
-    case 'Geist':
-      fontStyle = '"Geist", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
-      break;
-    case 'System':
-      fontStyle = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      break;
-    default:
-      fontStyle = '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif';
-  }
-
-  root.style.setProperty('--font-family', fontStyle);
-  document.body.style.fontFamily = fontStyle;
-  root.style.setProperty('--rilo-font-size', `${fontSizePx}px`);
-  document.body.style.fontSize = `${fontSizePx}px`;
-
-  if (density === 'compact') {
-    root.style.setProperty('--download-card-padding', '4px 8px');
-  } else if (density === 'spacious') {
-    root.style.setProperty('--download-card-padding', '14px 16px');
-  } else {
-    root.style.setProperty('--download-card-padding', '8px 12px');
-  }
-}
+export { applyVisualSettings } from '../lib/settings/visual';
 
 export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps) {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState<'downloads' | 'scheduler' | 'appearance'>('downloads');
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [persistedConfig, setPersistedConfig] = useState<AppConfig | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     async function loadConfig() {
       try {
         const loadedConfig = await invoke<AppConfig>('get_app_config');
         setConfig(loadedConfig);
+        setPersistedConfig(loadedConfig);
         applyVisualSettings(loadedConfig.appearance);
-        setTheme(loadedConfig.appearance.theme as 'dark' | 'light');
       } catch (err) {
         console.error('Failed loading app config:', err);
       }
     }
     loadConfig();
-  }, []);
+  }, [isOpen]);
 
   const updateLocalConfig = (newConfig: AppConfig) => {
     setConfig(newConfig);
     applyVisualSettings(newConfig.appearance);
-    setTheme(newConfig.appearance.theme as 'dark' | 'light');
+    emit("rilo-appearance-changed", newConfig.appearance).catch(() => {});
   };
 
-  const handleCloseAndSave = async () => {
+  const handleSave = async () => {
     if (config) {
       try {
         await invoke('update_app_config', { config });
+        setPersistedConfig(config);
+        applyVisualSettings(config.appearance);
+        emit("rilo-appearance-changed", config.appearance).catch(() => {});
       } catch (err) {
         console.error('Failed saving config on close:', err);
       }
+    }
+    onClose();
+  };
+
+  const handleCancel = () => {
+    if (persistedConfig) {
+      setConfig(persistedConfig);
+      applyVisualSettings(persistedConfig.appearance);
+      emit("rilo-appearance-changed", persistedConfig.appearance).catch(() => {});
     }
     onClose();
   };
@@ -142,14 +93,15 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
     try {
       const defaultConfig = await invoke<AppConfig>('reset_app_config');
       setConfig(defaultConfig);
+      setPersistedConfig(defaultConfig);
       applyVisualSettings(defaultConfig.appearance);
-      setTheme(defaultConfig.appearance.theme as 'dark' | 'light');
+      emit("rilo-appearance-changed", defaultConfig.appearance).catch(() => {});
     } catch (err) {
       console.error('Failed resetting config:', err);
     }
   };
 
-  if (!config) return null;
+  if (!isOpen || !config) return null;
 
   const accents = [
     { id: 'indigo', name: 'Indigo', hex: '#6366f1' },
@@ -161,7 +113,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 font-sans select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 font-sans select-none">
       <div className="bg-rilo-surface border border-rilo-border rounded-xl shadow-2xl w-full max-w-2xl h-[560px] max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-rilo-border bg-rilo-surface">
@@ -173,7 +125,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
               <h2 className="text-xs sm:text-sm font-bold text-rilo-primary">Rilo Preferences</h2>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleCloseAndSave}>
+          <Button variant="ghost" size="icon" onClick={handleCancel}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -441,6 +393,20 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
 
             {activeTab === 'appearance' && (
               <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-rilo-secondary">Community Theme</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1">
+                    {riloThemes.map((theme) => {
+                      const selected = (config.appearance.theme || 'rilo-default') === theme.id;
+                      return <button key={theme.id} onClick={() => updateLocalConfig({ ...config, appearance: { ...config.appearance, theme: theme.id } })}
+                        className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-[11px] transition-colors ${selected ? 'border-rilo-accent bg-rilo-accent-muted text-rilo-primary' : 'border-rilo-border bg-rilo-surface text-rilo-secondary hover:bg-rilo-elevated'}`}>
+                        <span className="flex gap-1" aria-hidden="true">{[theme.colors.background, theme.colors.surface, theme.colors.accent].map((color) => <i key={color} className="h-3 w-3 rounded-full border border-rilo-border" style={{ backgroundColor: color }} />)}</span>
+                        <span className="truncate font-medium">{theme.name}</span>
+                      </button>;
+                    })}
+                  </div>
+                  <p className="text-[11px] text-rilo-muted">Themes control surfaces and text. Accent color remains a separate preference.</p>
+                </div>
                 {/* Font Family Selection */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-rilo-secondary">Typography Font Family</label>
@@ -468,7 +434,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                 <div className="bg-rilo-elevated border border-rilo-border p-3 rounded-lg flex items-center justify-between gap-4">
                   <div>
                     <span className="font-bold text-rilo-primary block text-xs">Application Font Size</span>
-                    <span className="text-[11px] text-rilo-muted">Adjust text size between 12px and 20px (Default: 14px)</span>
+                    <span className="text-[11px] text-rilo-muted">Adjust text size between 12px and 20px (Default: 15px)</span>
                   </div>
 
                   <div className="flex items-center space-x-1.5 bg-rilo-surface border border-rilo-border px-2 py-1 rounded-md flex-shrink-0">
@@ -476,7 +442,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                       size="icon"
                       variant="ghost"
                       onClick={() => {
-                        const current = config.appearance.font_size_px || 14;
+                        const current = config.appearance.font_size_px || 15;
                         if (current > 12) {
                           updateLocalConfig({
                             ...config,
@@ -484,7 +450,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                           });
                         }
                       }}
-                      disabled={(config.appearance.font_size_px || 14) <= 12}
+                      disabled={(config.appearance.font_size_px || 15) <= 12}
                       className="w-6 h-6 text-xs font-bold"
                       title="Decrease Font Size"
                     >
@@ -492,14 +458,14 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                     </Button>
 
                     <span className="text-xs font-bold text-rilo-primary font-mono w-14 text-center tabular-nums">
-                      {config.appearance.font_size_px || 14} px
+                      {config.appearance.font_size_px || 15} px
                     </span>
 
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={() => {
-                        const current = config.appearance.font_size_px || 14;
+                        const current = config.appearance.font_size_px || 15;
                         if (current < 20) {
                           updateLocalConfig({
                             ...config,
@@ -507,7 +473,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                           });
                         }
                       }}
-                      disabled={(config.appearance.font_size_px || 14) >= 20}
+                      disabled={(config.appearance.font_size_px || 15) >= 20}
                       className="w-6 h-6 text-xs font-bold"
                       title="Increase Font Size"
                     >
@@ -533,7 +499,7 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                           }}
                           className={`flex flex-col items-center p-2.5 rounded-lg border transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-rilo-elevated border-rilo-accent ring-2 ring-indigo-500/40'
+                            ? 'bg-rilo-elevated border-rilo-accent ring-2 ring-rilo-accent/40'
                               : 'bg-rilo-surface border-rilo-border hover:bg-rilo-elevated'
                           }`}
                         >
@@ -550,42 +516,23 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
                   </div>
                 </div>
 
-                {/* Interface Theme & Layout Density */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-rilo-secondary">Interface Theme</label>
-                    <Select
-                      value={config.appearance.theme}
-                      onChange={(e) => {
-                        const t = (e.target as HTMLSelectElement).value as 'dark' | 'light';
-                        updateLocalConfig({
-                          ...config,
-                          appearance: { ...config.appearance, theme: t },
-                        });
-                      }}
-                    >
-                      <option value="dark">Dark Mode</option>
-                      <option value="light">Light Mode</option>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-rilo-secondary">Row Layout Density</label>
-                    <Select
-                      value={config.appearance.density}
-                      onChange={(e) => {
-                        const val = (e.target as HTMLSelectElement).value;
-                        updateLocalConfig({
-                          ...config,
-                          appearance: { ...config.appearance, density: val },
-                        });
-                      }}
-                    >
-                      <option value="compact">Compact (High Density)</option>
-                      <option value="comfortable">Comfortable (Recommended)</option>
-                      <option value="spacious">Spacious</option>
-                    </Select>
-                  </div>
+                {/* Layout Density */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-rilo-secondary">Row Layout Density</label>
+                  <Select
+                    value={config.appearance.density || "comfortable"}
+                    onChange={(e) => {
+                      const val = (e.target as HTMLSelectElement).value;
+                      updateLocalConfig({
+                        ...config,
+                        appearance: { ...config.appearance, density: val },
+                      });
+                    }}
+                  >
+                    <option value="compact">Compact (High Density)</option>
+                    <option value="comfortable">Comfortable (Recommended)</option>
+                    <option value="spacious">Spacious</option>
+                  </Select>
                 </div>
               </div>
             )}
@@ -598,8 +545,8 @@ export function SettingsModal({ isOpen, onClose, setTheme }: SettingsModalProps)
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Restore Defaults</span>
           </Button>
-          <Button variant="default" size="sm" onClick={handleCloseAndSave}>
-            Done
+          <Button variant="default" size="sm" onClick={handleSave}>
+            Save
           </Button>
         </div>
       </div>

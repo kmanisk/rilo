@@ -1,32 +1,34 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, emit, UnlistenFn } from "@tauri-apps/api/event";
 import { DownloadItem, DownloadProgressPayload, DownloadRecord, ExtractionProgressPayload } from "./types";
-import { getCategoryFromFilename, generateDeterministicSegments } from "./utils";
+import { getCategoryFromFilename } from "./utils";
+import { applyExtractionProgress, progressToDownloadItem, recordToDownloadItem } from "./lib/downloads/mapping";
+import { normalizeDownloadStatus } from "./lib/downloads/status";
+import { applyVisualSettings, AppearanceSettings } from "./lib/settings/visual";
+import { openDownloadDetailsWindow, openCompletionWindow, openTestWindow } from "./lib/windows";
 
+import CustomTitleBar from "./components/CustomTitleBar";
 import Toolbar from "./components/Toolbar";
 import Sidebar, { CategoryTab } from "./components/Sidebar";
 import DownloadGrid from "./components/DownloadGrid";
-import DownloadDetailsModal from "./components/DownloadDetailsModal";
-import CompletionDialog from "./components/CompletionDialog";
 import StatusBar from "./components/StatusBar";
 import NewDownloadModal from "./components/NewDownloadModal";
 import UpdateUrlModal from "./components/UpdateUrlModal";
 import AboutModal from "./components/AboutModal";
 import SchedulerModal from "./components/SchedulerModal";
 import DeleteConfirmationModal from "./components/DeleteConfirmationModal";
-import { SettingsModal, AppConfig, applyVisualSettings } from "./components/SettingsModal";
+import { SettingsModal, AppConfig } from "./components/SettingsModal";
 
 export default function App() {
   const [downloads, setDownloads] = useState<Record<string, DownloadItem>>({});
   const [activeTab, setActiveTab] = useState<CategoryTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<DownloadItem | null>(null);
-  const [detailsModalItem, setDetailsModalItem] = useState<DownloadItem | null>(null);
-  const [completionDialogItem, setCompletionDialogItem] = useState<{ item: DownloadItem; action: string } | null>(null);
   const [refreshItem, setRefreshItem] = useState<DownloadItem | null>(null);
   const [deleteModalItem, setDeleteModalItem] = useState<DownloadItem | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [currentThemeId, setCurrentThemeId] = useState<string>("luna-xp");
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   const [showNewModal, setShowNewModal] = useState(false);
@@ -37,18 +39,52 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const completedTrackedRef = useRef<Set<string>>(new Set());
 
+  const handleSelectTheme = async (themeId: string) => {
+    try {
+      setCurrentThemeId(themeId);
+      const appConfig = await invoke<AppConfig>("get_app_config");
+      const updatedConfig: AppConfig = {
+        ...appConfig,
+        appearance: {
+          ...appConfig.appearance,
+          theme: themeId,
+        },
+      };
+      applyVisualSettings(updatedConfig.appearance);
+      await invoke("update_app_config", { config: updatedConfig });
+      emit("rilo-appearance-changed", updatedConfig.appearance).catch(() => {});
+      showNotification("Theme updated successfully");
+    } catch (err) {
+      console.error("Error updating theme:", err);
+    }
+  };
+
   // Load Appearance & Typography settings from persistent AppData AppConfig on startup
   useEffect(() => {
     async function initAppearance() {
       try {
         const appConfig = await invoke<AppConfig>("get_app_config");
         applyVisualSettings(appConfig.appearance);
-        setTheme(appConfig.appearance.theme as 'dark' | 'light');
+        if (appConfig.appearance.theme) {
+          setCurrentThemeId(appConfig.appearance.theme);
+        }
       } catch (err) {
         console.error("Error loading Rilo app config:", err);
       }
     }
     initAppearance();
+
+    let unlisten: (() => void) | undefined;
+    listen<AppearanceSettings>("rilo-appearance-changed", (event) => {
+      if (event.payload?.theme) {
+        setCurrentThemeId(event.payload.theme);
+      }
+      applyVisualSettings(event.payload);
+    }).then((un) => { unlisten = un; }).catch(() => {});
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   // Desktop Keyboard Shortcuts (Ctrl+F, Ctrl+N, Space, Delete, Enter, Esc)
@@ -65,7 +101,7 @@ export default function App() {
         e.preventDefault();
         setShowNewModal(true);
       } else if (selectedItem) {
-        const statusLower = (selectedItem.status || "").toLowerCase();
+        const statusLower = normalizeDownloadStatus(selectedItem.status);
         if (e.key === "Delete") {
           e.preventDefault();
           handleRemove(selectedItem.id);
@@ -93,42 +129,13 @@ export default function App() {
         const records = await invoke<DownloadRecord[]>("get_download_history");
         const historyMap: Record<string, DownloadItem> = {};
         records.forEach((rec) => {
-          const statusLower = (rec.status || "").toLowerCase();
-          const threads = rec.threads || 4;
-          const initialSegments = generateDeterministicSegments(
-            rec.total_bytes,
-            threads,
-            rec.downloaded_bytes,
-            statusLower
-          );
+          const item = recordToDownloadItem(rec);
 
-          if (statusLower === "completed") {
+          if (item.status === "completed") {
             completedTrackedRef.current.add(rec.id);
           }
 
-          historyMap[rec.id] = {
-            id: rec.id,
-            url: rec.url,
-            redirectUrl: rec.redirect_url,
-            filename: rec.filename,
-            savePath: rec.save_path,
-            bytesDownloaded: rec.downloaded_bytes,
-            totalBytes: rec.total_bytes,
-            status: (statusLower as any) || "completed",
-            startTime: Number(rec.created_at) * 1000 || Date.now(),
-            speedBps: 0,
-            activeThreads: threads,
-            resumable: rec.resumable ?? true,
-            etag: rec.etag,
-            lastModified: rec.last_modified,
-            mimeType: rec.mime_type,
-            createdAt: rec.created_at,
-            segments: initialSegments,
-            autoExtract: rec.auto_extract,
-            extractDir: rec.extract_dir,
-            deleteArchiveAfterExtract: rec.delete_archive_after_extract,
-            extractionState: rec.extraction_state as any,
-          };
+          historyMap[rec.id] = item;
         });
         setDownloads(historyMap);
       } catch (err) {
@@ -150,96 +157,18 @@ export default function App() {
           "download-progress",
           (event) => {
             const payload = event.payload;
-            const statusLower = (payload.status || "").toLowerCase();
+            const statusLower = normalizeDownloadStatus(payload.status);
 
             setDownloads((prev) => {
-              const existing = prev[payload.download_id];
-              const prevSpeed = existing?.speedBps || 0;
-              const rawSpeed = payload.speed_bps || 0;
+              const updatedItem = progressToDownloadItem(payload, prev[payload.download_id]);
 
-              // Exponential Moving Average (EMA) speed smoothing (alpha = 0.3)
-              let smoothedSpeed = 0;
-              if (statusLower === "paused" || statusLower === "completed" || rawSpeed === 0) {
-                smoothedSpeed = 0;
-              } else if (prevSpeed === 0) {
-                smoothedSpeed = rawSpeed;
-              } else {
-                smoothedSpeed = Math.round(prevSpeed * 0.7 + rawSpeed * 0.3);
-              }
-
-              // Compute stable ETA from smoothed speed
-              let etaSeconds = payload.eta_seconds;
-              if (smoothedSpeed > 0 && payload.total_bytes > payload.bytes_downloaded) {
-                etaSeconds = Math.round((payload.total_bytes - payload.bytes_downloaded) / smoothedSpeed);
-              }
-
-              const hasIncomingSegments = Array.isArray(payload.segments) && payload.segments.length > 0;
-              let mergedSegments = hasIncomingSegments ? payload.segments : existing?.segments;
-
-              if (!mergedSegments || mergedSegments.length === 0) {
-                if (payload.total_bytes > 0 && (payload.active_threads || 4) > 0) {
-                  mergedSegments = generateDeterministicSegments(
-                    payload.total_bytes,
-                    payload.active_threads || 4,
-                    payload.bytes_downloaded,
-                    payload.status
-                  );
-                }
-              } else if (mergedSegments && mergedSegments.length > 0) {
-                if (statusLower === "paused" || statusLower === "queued") {
-                  mergedSegments = mergedSegments.map((seg) => ({
-                    ...seg,
-                    state: "paused",
-                    current_speed_bps: 0,
-                  }));
-                } else if (statusLower === "completed") {
-                  mergedSegments = mergedSegments.map((seg) => ({
-                    ...seg,
-                    state: "completed",
-                    progress_percent: 100,
-                    downloaded_bytes: seg.total_bytes || seg.downloaded_bytes,
-                    current_speed_bps: 0,
-                  }));
-                }
-              }
-
-              const updatedItem: DownloadItem = {
-                id: payload.download_id,
-                url: existing?.url || "",
-                redirectUrl: existing?.redirectUrl,
-                filename: payload.filename || existing?.filename || "download.bin",
-                savePath: payload.save_path || existing?.savePath || "",
-                bytesDownloaded: payload.bytes_downloaded,
-                totalBytes: payload.total_bytes,
-                status: statusLower as any,
-                errorMessage: payload.error_message,
-                startTime: existing?.startTime || Date.now(),
-                speedBps: smoothedSpeed,
-                etaSeconds: etaSeconds,
-                activeThreads: payload.active_threads || existing?.activeThreads || 4,
-                resumable: payload.resumable ?? existing?.resumable ?? true,
-                etag: payload.etag || existing?.etag,
-                lastModified: payload.last_modified || existing?.lastModified,
-                mimeType: payload.mime_type || existing?.mimeType,
-                createdAt: existing?.createdAt,
-                segments: mergedSegments,
-              };
-
-              // Handle post-completion triggers once per download session
               if (statusLower === "completed" && !completedTrackedRef.current.has(payload.download_id)) {
                 completedTrackedRef.current.add(payload.download_id);
                 showNotification(`Download completed: ${updatedItem.filename}`);
-                setCompletionDialogItem({ item: updatedItem, action: "none" });
+                openCompletionWindow(payload.download_id, updatedItem.filename);
               }
 
               setSelectedItem((current) => {
-                if (current && current.id === payload.download_id) {
-                  return updatedItem;
-                }
-                return current;
-              });
-
-              setDetailsModalItem((current) => {
                 if (current && current.id === payload.download_id) {
                   return updatedItem;
                 }
@@ -273,20 +202,9 @@ export default function App() {
               const existing = prev[payload.download_id];
               if (!existing) return prev;
 
-              const updatedItem: DownloadItem = {
-                ...existing,
-                extractionState: payload.state,
-                extractionProgress: payload,
-              };
+              const updatedItem = applyExtractionProgress(existing, payload);
 
               setSelectedItem((current) => {
-                if (current && current.id === payload.download_id) {
-                  return updatedItem;
-                }
-                return current;
-              });
-
-              setDetailsModalItem((current) => {
                 if (current && current.id === payload.download_id) {
                   return updatedItem;
                 }
@@ -430,12 +348,41 @@ export default function App() {
     }
   };
 
-  const handleOpenDetailsWindow = (item: DownloadItem) => {
-    invoke("open_details_window", {
-      downloadId: item.id,
-      title: item.filename,
-    }).catch((err) => console.error("Failed opening details window:", err));
+  const handleOpenDetailsWindow = async (downloadId: string, title?: string) => {
+    const existing = downloads[downloadId];
+    if (!existing) {
+      showNotification("Download is no longer available");
+      return;
+    }
+
+    try {
+      const records = await invoke<DownloadRecord[]>("get_download_history");
+      const found = records.some((r) => r.id === downloadId);
+      if (!found) {
+        showNotification("Download is no longer available");
+        return;
+      }
+    } catch (err) {
+      console.warn("Record DB validation check error:", err);
+    }
+
+    try {
+      await openDownloadDetailsWindow(downloadId, title || existing.filename);
+    } catch (err) {
+      showNotification("Download is no longer available");
+    }
   };
+
+  const handleOpenTestWindow = () => {
+    openTestWindow();
+  };
+
+  useEffect(() => {
+    let unlistenTest: UnlistenFn | undefined;
+    listen<{ message: string }>("rilo-test-event", () => showNotification("Received event from test window"))
+      .then((stop) => { unlistenTest = stop; });
+    return () => unlistenTest?.();
+  }, []);
 
   const handleCancel = async (id: string) => {
     try {
@@ -463,7 +410,6 @@ export default function App() {
         return next;
       });
       if (selectedItem?.id === id) setSelectedItem(null);
-      if (detailsModalItem?.id === id) setDetailsModalItem(null);
       showNotification("Task removed from Rilo list");
     } catch (err: any) {
       console.error("Failed removing record:", err);
@@ -483,7 +429,6 @@ export default function App() {
       });
       setDeleteModalItem(null);
       if (selectedItem?.id === item.id) setSelectedItem(null);
-      if (detailsModalItem?.id === item.id) setDetailsModalItem(null);
       showNotification("Downloaded file deleted from disk");
     } catch (err: any) {
       console.error("Failed deleting file from disk:", err);
@@ -511,7 +456,7 @@ export default function App() {
 
   const handleClearCompleted = async () => {
     const completedItems = Object.values(downloads).filter(
-      (i) => (i.status || "").toLowerCase() === "completed"
+      (i) => normalizeDownloadStatus(i.status) === "completed"
     );
     for (const item of completedItems) {
       try {
@@ -523,7 +468,7 @@ export default function App() {
     setDownloads((prev) => {
       const next: Record<string, DownloadItem> = {};
       Object.entries(prev).forEach(([id, item]) => {
-        if ((item.status || "").toLowerCase() !== "completed") {
+        if (normalizeDownloadStatus(item.status) !== "completed") {
           next[id] = item;
         }
       });
@@ -542,7 +487,7 @@ export default function App() {
   const itemsList = Object.values(downloads);
 
   const filteredItems = itemsList.filter((item) => {
-    const statusLower = (item.status || "").toLowerCase();
+    const statusLower = normalizeDownloadStatus(item.status);
     let matchesCategory = true;
     if (activeTab === "downloading") {
       matchesCategory = statusLower === "downloading" || statusLower === "reconnecting" || statusLower === "restarting";
@@ -566,20 +511,20 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  const hasCompleted = itemsList.some((i) => (i.status || "").toLowerCase() === "completed");
+  const hasCompleted = itemsList.some((i) => normalizeDownloadStatus(i.status) === "completed");
 
   const statusCounts = {
     all: itemsList.length,
     downloading: itemsList.filter((i) => {
-      const s = (i.status || "").toLowerCase();
+      const s = normalizeDownloadStatus(i.status);
       return s === "downloading" || s === "reconnecting" || s === "restarting";
     }).length,
-    queued: itemsList.filter((i) => (i.status || "").toLowerCase() === "queued").length,
-    paused: itemsList.filter((i) => (i.status || "").toLowerCase() === "paused").length,
-    completed: itemsList.filter((i) => (i.status || "").toLowerCase() === "completed").length,
+    queued: itemsList.filter((i) => normalizeDownloadStatus(i.status) === "queued").length,
+    paused: itemsList.filter((i) => normalizeDownloadStatus(i.status) === "paused").length,
+    completed: itemsList.filter((i) => normalizeDownloadStatus(i.status) === "completed").length,
     failed: itemsList.filter((i) => {
-      const s = (i.status || "").toLowerCase();
-      return s === "error" || s === "failed" || s === "cancelled";
+      const s = normalizeDownloadStatus(i.status);
+      return s === "error" || s === "cancelled";
     }).length,
   };
 
@@ -597,6 +542,26 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen bg-rilo-bg text-rilo-primary flex flex-col overflow-hidden font-sans select-none antialiased">
+      {/* 1. Custom Frameless Title Bar with Menus & Search */}
+      <CustomTitleBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchInputRef={searchInputRef}
+        onNewTask={() => setShowNewModal(true)}
+        onOpenFolderSelected={() => selectedItem && handleOpenFolder(selectedItem.savePath)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenScheduler={() => setShowSchedulerModal(true)}
+        onOpenAbout={() => setShowAboutModal(true)}
+        onClearCompleted={handleClearCompleted}
+        onResumeSelected={() => selectedItem && handleResume(selectedItem)}
+        onPauseSelected={() => selectedItem && handlePause(selectedItem.id)}
+        onCancelSelected={() => selectedItem && handleCancel(selectedItem.id)}
+        onDeleteSelected={() => selectedItem && setDeleteModalItem(selectedItem)}
+        currentThemeId={currentThemeId}
+        onSelectTheme={handleSelectTheme}
+      />
+
+      {/* 2. Dense Command Toolbar */}
       <Toolbar
         selectedItem={selectedItem}
         hasCompleted={hasCompleted}
@@ -607,14 +572,13 @@ export default function App() {
         onDeleteSelected={() => selectedItem && setDeleteModalItem(selectedItem)}
         onClearCompleted={handleClearCompleted}
         onOpenFolderSelected={() => selectedItem && handleOpenFolder(selectedItem.savePath)}
-        onOpenDetailsSelected={() => selectedItem && setDetailsModalItem(selectedItem)}
+        onOpenDetailsSelected={() => selectedItem && handleOpenDetailsWindow(selectedItem.id, selectedItem.filename)}
         onOpenScheduler={() => setShowSchedulerModal(true)}
         onOpenSettings={() => setShowSettingsModal(true)}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchInputRef={searchInputRef}
+        onOpenTestWindow={handleOpenTestWindow}
       />
 
+      {/* 3. Main Body Split: Sidebar + Download Table */}
       <div className="flex-1 flex overflow-hidden relative">
         <Sidebar
           activeTab={activeTab}
@@ -625,7 +589,7 @@ export default function App() {
         />
 
         <main className="flex-1 flex flex-col min-w-0 bg-rilo-bg overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
             <DownloadGrid
               items={filteredItems}
               selectedItem={selectedItem}
@@ -638,12 +602,15 @@ export default function App() {
               onRemove={handleRemove}
               onDeleteFileDisk={(item) => setDeleteModalItem(item)}
               onRefreshLink={setRefreshItem}
-              onOpenDetails={(item) => setDetailsModalItem(item)}
+              onOpenDetails={(item) => handleOpenDetailsWindow(item.id, item.filename)}
+              onOpenDetailsWindow={(item) => handleOpenDetailsWindow(item.id, item.filename)}
+              onNewTask={() => setShowNewModal(true)}
             />
           </div>
         </main>
       </div>
 
+      {/* 4. Bottom Status Bar */}
       <StatusBar
         downloadingCount={statusCounts.downloading}
         totalSpeedBps={totalSpeedBps}
@@ -690,32 +657,6 @@ export default function App() {
           item={refreshItem}
           onClose={() => setRefreshItem(null)}
           onUpdateUrl={handleUpdateUrl}
-        />
-      )}
-
-      {/* Floating Download Details Inspector Window */}
-      {detailsModalItem && (
-        <DownloadDetailsModal
-          item={detailsModalItem}
-          onClose={() => setDetailsModalItem(null)}
-          onOpenFile={handleOpenFile}
-          onOpenFolder={handleOpenFolder}
-          onPause={handlePause}
-          onResume={handleResume}
-          onRemove={handleRemove}
-          onDeleteFileDisk={(item) => setDeleteModalItem(item)}
-          onRefreshLink={setRefreshItem}
-        />
-      )}
-
-      {/* Download Completion Dialog */}
-      {completionDialogItem && (
-        <CompletionDialog
-          item={completionDialogItem.item}
-          action={completionDialogItem.action}
-          onClose={() => setCompletionDialogItem(null)}
-          onOpenFile={handleOpenFile}
-          onOpenFolder={handleOpenFolder}
         />
       )}
 

@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,7 +6,7 @@
   /* Centralized Production Rilo Design Token & Theme Engine */
   :root {
     --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-    --rilo-font-size: 14px;
+    --rilo-font-size: 15px;
 
     /* Base Dark Theme Defaults */
     --background: #09090b;
@@ -25,7 +23,8 @@
     --border-subtle: #1e1e24;
 
     /* Base Accent: Indigo */
-    --rilo-accent: #6366f1;
+    --rilo-accent: var(--accent, #6366f1);
+    --rilo-accent-foreground: #ffffff;
     --rilo-accent-hover: #4f46e5;
     --rilo-accent-active: #4338ca;
     --rilo-accent-muted: rgba(99, 102, 241, 0.15);
@@ -34,6 +33,25 @@
     --success: #10b981;
     --warning: #f59e0b;
     --error: #f43f5e;
+    --overlay: rgba(9, 9, 11, 0.72);
+    --color-background: var(--background);
+    --color-surface: var(--surface);
+    --color-surface-elevated: var(--surface-elevated);
+    --color-surface-hover: var(--surface-hover);
+    --color-surface-active: var(--surface-selected);
+    --color-text: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-muted: var(--text-muted);
+    --color-border: var(--border);
+    --color-border-subtle: var(--border-subtle);
+    --color-accent: var(--rilo-accent);
+    --color-accent-foreground: var(--rilo-accent-foreground);
+    --color-accent-hover: var(--rilo-accent-hover);
+    --color-accent-active: var(--rilo-accent-active);
+    --color-success: var(--success); --color-warning: var(--warning); --color-error: var(--error); --color-info: var(--info, var(--rilo-accent));
+    --color-success-foreground: #fff; --color-warning-foreground: #1c1917; --color-error-foreground: #fff; --color-info-foreground: #fff;
+    --color-selection: var(--rilo-accent-muted); --color-selection-foreground: var(--text-primary);
+    --color-input-background: var(--surface-elevated); --color-input-border: var(--border); --color-focus-ring: var(--rilo-accent);
 
     /* Default Density (Comfortable) */
     --download-card-padding: 12px 14px;
@@ -59,6 +77,7 @@
     --success: #059669;
     --warning: #d97706;
     --error: #e11d48;
+    --overlay: rgba(15, 23, 42, 0.42);
   }
 
   /* Accent Color Palette Definitions */
@@ -130,9 +149,8 @@
   }
 
   /* Font Family Variants */
-  [data-font="Inter"] { --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif; }
-  [data-font="Geist"] { --font-family: "Geist", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
-  [data-font="IBM Plex Sans"] { --font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  /* Font choices intentionally use installed system fonts: Rilo remains fully offline. */
+  [data-font="Inter"], [data-font="Geist"], [data-font="IBM Plex Sans"] { --font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
   [data-font="JetBrains Mono"] { --font-family: "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New", monospace; }
   [data-font="Iosevka"] { --font-family: "Iosevka", "Cascadia Mono", "Consolas", "Courier New", monospace; }
   [data-font="Roboto"] { --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -145,6 +163,7 @@
 
   html, body {
     font-size: var(--rilo-font-size);
+    line-height: 1.45;
     background-color: var(--background);
     color: var(--text-primary);
     user-select: none;
@@ -154,9 +173,9 @@
   }
 
   select, option, input, textarea {
-    background-color: var(--surface-elevated);
-    color: var(--text-primary);
-    border-color: var(--border);
+    background-color: var(--color-input-background);
+    color: var(--color-text);
+    border-color: var(--color-input-border);
     user-select: text;
   }
 
@@ -167,7 +186,7 @@
 
   /* Accessible Focus Ring styling powered by selected accent */
   *:focus-visible {
-    outline: 2px solid var(--rilo-accent);
+    outline: 2px solid var(--color-focus-ring);
     outline-offset: 1px;
   }
 
@@ -203,8 +222,96 @@
 .border-rilo-border { border-color: var(--border) !important; }
 .border-rilo-subtle { border-color: var(--border-subtle) !important; }
 
-.bg-rilo-accent { background-color: var(--rilo-accent) !important; color: #ffffff !important; }
+.bg-rilo-accent { background-color: var(--rilo-accent) !important; color: var(--rilo-accent-foreground) !important; }
 .hover\:bg-rilo-accent-hover:hover { background-color: var(--rilo-accent-hover) !important; }
 .text-rilo-accent { color: var(--rilo-accent) !important; }
 .border-rilo-accent { border-color: var(--rilo-accent-border) !important; }
 .bg-rilo-accent-muted { background-color: var(--rilo-accent-muted) !important; }
+.bg-rilo-overlay { background-color: var(--overlay) !important; }
+.bg-rilo-success { background-color: var(--success) !important; }
+.bg-rilo-warning { background-color: var(--warning) !important; }
+.bg-rilo-error { background-color: var(--error) !important; }
+.bg-rilo-info { background-color: var(--info, var(--rilo-accent)) !important; }
+.rilo-button-primary { background:var(--color-accent); color:var(--color-accent-foreground); border:1px solid var(--color-accent); }
+.rilo-button-primary:hover { background:var(--color-accent-hover); }
+.rilo-button-secondary { background:var(--color-surface-elevated); color:var(--color-text); border:1px solid var(--color-border); }
+.rilo-button-secondary:hover, .rilo-button-toolbar:hover { background:var(--color-surface-hover); }
+.rilo-button-toolbar { background:var(--color-surface); color:var(--color-text-secondary); border:1px solid transparent; }
+.rilo-button-danger { background:color-mix(in srgb, var(--color-error) 13%, var(--color-surface)); color:var(--color-error); border:1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); }
+.rilo-button-warning { background:color-mix(in srgb, var(--color-warning) 13%, var(--color-surface)); color:var(--color-warning); border:1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border)); }
+.rilo-button-success { background:color-mix(in srgb, var(--color-success) 13%, var(--color-surface)); color:var(--color-success); border:1px solid color-mix(in srgb, var(--color-success) 40%, var(--color-border)); }
+.rilo-button-primary:disabled,.rilo-button-secondary:disabled,.rilo-button-toolbar:disabled,.rilo-button-danger:disabled,.rilo-button-warning:disabled,.rilo-button-success:disabled { background:var(--color-surface-elevated); color:var(--color-text-muted); border-color:var(--color-border-subtle); opacity:1; }
+.rilo-input { background:var(--color-input-background); color:var(--color-text); border-color:var(--color-input-border); }
+.rilo-input::placeholder { color:var(--color-text-muted); }
+
+@media (max-width: 1100px) {
+  .download-list .download-destination, .download-list .download-actions { display: none; }
+}
+
+/* Windows XP / Classic Desktop Progress Bar Styling */
+.rilo-xp-progress-track {
+  position: relative;
+  background-color: var(--surface-elevated, #18181c);
+  border: 1px solid var(--border-subtle, #30363d);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.rilo-xp-progress-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 150ms ease-out;
+  position: relative;
+  overflow: hidden;
+  background-image: 
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.15) 75%, rgba(0, 0, 0, 0.3) 100%),
+    repeating-linear-gradient(to right, transparent 0, transparent 6px, rgba(0, 0, 0, 0.25) 6px, rgba(0, 0, 0, 0.25) 8px);
+}
+
+.rilo-xp-progress-fill.status-downloading {
+  background-color: var(--rilo-accent, #2563eb);
+}
+
+.rilo-xp-progress-fill.status-completed {
+  background-color: var(--success, #22c55e);
+}
+
+.rilo-xp-progress-fill.status-paused {
+  background-color: var(--warning, #eab308);
+}
+
+.rilo-xp-progress-fill.status-error {
+  background-color: var(--error, #ef4444);
+}
+
+.rilo-xp-progress-fill.status-queued {
+  background-color: var(--text-muted, #64748b);
+}
+
+.rilo-xp-progress-fill.status-downloading::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  background-size: 60px 100%;
+  background-repeat: no-repeat;
+  animation: rilo-xp-sheen 1.8s infinite linear;
+}
+
+@keyframes rilo-xp-sheen {
+  0% {
+    background-position: -60px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}

@@ -6,6 +6,7 @@ import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import SegmentProgressView from "./SegmentProgressView";
 import UnifiedSegmentProgressBar from "./UnifiedSegmentProgressBar";
+import DesktopProgressBar from "./ui/DesktopProgressBar";
 import { X, FileText, Play, Pause, FolderOpen, RefreshCw, Trash2, FileCheck, Layers, Link as LinkIcon, HardDrive, Archive, Key, Loader2 } from "lucide-preact";
 
 interface DownloadDetailsDrawerProps {
@@ -201,12 +202,11 @@ export default function DownloadDetailsDrawer({
                       </span>
                       <span>{item.extractionProgress?.progress_percent.toFixed(0) || 0}%</span>
                     </div>
-                    <div className="w-full h-1.5 bg-rilo-surface rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-rilo-accent transition-all duration-300"
-                        style={{ width: `${item.extractionProgress?.progress_percent || 0}%` }}
-                      />
-                    </div>
+                    <DesktopProgressBar
+                      percent={item.extractionProgress?.progress_percent || 0}
+                      status="downloading"
+                      heightClassName="h-2"
+                    />
                     {item.extractionProgress?.current_file && (
                       <p className="text-[9px] text-rilo-muted truncate">
                         {item.extractionProgress.current_file}

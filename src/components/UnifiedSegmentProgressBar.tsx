@@ -1,5 +1,6 @@
 import { SegmentProgressPayload } from "../types";
 import { formatBytes } from "../utils";
+import { normalizeDownloadStatus } from "../lib/downloads/status";
 
 interface UnifiedSegmentProgressBarProps {
   bytesDownloaded: number;
@@ -17,14 +18,14 @@ export default function UnifiedSegmentProgressBar({
   status,
   segments,
   showSegments = false,
-  heightClassName = "h-2",
+  heightClassName = "h-2.5",
   className = "",
 }: UnifiedSegmentProgressBarProps) {
-  const statusLower = (status || "").toLowerCase();
+  const statusLower = normalizeDownloadStatus(status);
   const isCompleted = statusLower === "completed";
   const isPaused = statusLower === "paused";
   const isQueued = statusLower === "queued";
-  const isError = statusLower === "error" || statusLower === "failed" || statusLower === "cancelled";
+  const isError = statusLower === "error" || statusLower === "cancelled";
 
   // Overall percentage strictly based on total downloaded bytes / total file bytes
   const overallPercent =
@@ -32,21 +33,17 @@ export default function UnifiedSegmentProgressBar({
 
   const segmentList = segments && segments.length > 0 ? segments : [];
 
-  // Determine overall bar color theme
-  const getFillColor = (segState?: string) => {
-    const normSegState = (segState || "").toLowerCase();
-    if (isCompleted || normSegState === "completed") return "bg-emerald-400";
-    if (isError || normSegState === "failed" || normSegState === "error") return "bg-rose-500";
-    if (isPaused || normSegState === "paused") return "bg-amber-400";
-    if (isQueued || normSegState === "queued") return "bg-blue-400";
-    return "bg-rilo-accent";
-  };
+  let overallStatusClass = "status-downloading";
+  if (isCompleted) overallStatusClass = "status-completed";
+  else if (isPaused) overallStatusClass = "status-paused";
+  else if (isError) overallStatusClass = "status-error";
+  else if (isQueued) overallStatusClass = "status-queued";
 
-  // Segment Subdivisions View (Enabled only in Details Window when requested)
+  // Segment Subdivisions View (Enabled in Details Window when requested)
   if (showSegments && segmentList.length > 1 && totalBytes > 0) {
     return (
       <div
-        className={`w-full ${heightClassName} bg-rilo-elevated border border-rilo-border/40 rounded-full overflow-hidden flex relative select-none ${className}`}
+        className={`w-full ${heightClassName} rilo-xp-progress-track flex relative select-none ${className}`}
         title={`Overall Progress: ${overallPercent.toFixed(1)}% (${formatBytes(bytesDownloaded)} / ${formatBytes(totalBytes)})`}
       >
         {segmentList.map((seg, idx) => {
@@ -58,13 +55,11 @@ export default function UnifiedSegmentProgressBar({
             segTotal > 0 ? Math.min(100, Math.max(0, (segDownloaded / segTotal) * 100)) : 0;
 
           const segStateLower = (seg.state || "").toLowerCase();
-          const isSegRunning =
-            !isCompleted &&
-            !isPaused &&
-            (segStateLower === "running" || segStateLower === "downloading") &&
-            segProgressPct < 100;
+          let segStatusClass = overallStatusClass;
+          if (segStateLower === "completed") segStatusClass = "status-completed";
+          else if (segStateLower === "failed" || segStateLower === "error") segStatusClass = "status-error";
+          else if (segStateLower === "paused") segStatusClass = "status-paused";
 
-          const segColorClass = getFillColor(seg.state);
           const isLast = idx === segmentList.length - 1;
 
           return (
@@ -77,9 +72,7 @@ export default function UnifiedSegmentProgressBar({
               title={`Segment ${seg.segment_id}: ${formatBytes(segDownloaded)} / ${formatBytes(segTotal)} (${segProgressPct.toFixed(0)}%)`}
             >
               <div
-                className={`h-full transition-all duration-300 ${segColorClass} ${
-                  isSegRunning ? "animate-pulse" : ""
-                }`}
+                className={`rilo-xp-progress-fill ${segStatusClass}`}
                 style={{ width: `${segProgressPct}%` }}
               />
             </div>
@@ -89,19 +82,14 @@ export default function UnifiedSegmentProgressBar({
     );
   }
 
-  // Standard Clean Progress Bar (Used on main Download Cards and Lists)
-  const fillColor = getFillColor();
-  const isRunning = !isCompleted && !isPaused && !isQueued && !isError;
-
+  // Standard Windows XP Desktop Progress Bar
   return (
     <div
-      className={`w-full ${heightClassName} bg-rilo-elevated border border-rilo-border/40 rounded-full overflow-hidden relative ${className}`}
+      className={`w-full ${heightClassName} rilo-xp-progress-track ${className}`}
       title={`Overall Progress: ${overallPercent.toFixed(1)}% (${formatBytes(bytesDownloaded)} / ${formatBytes(totalBytes)})`}
     >
       <div
-        className={`h-full transition-all duration-300 ${fillColor} ${
-          isRunning ? "animate-pulse" : ""
-        }`}
+        className={`rilo-xp-progress-fill ${overallStatusClass}`}
         style={{ width: `${overallPercent}%` }}
       />
     </div>

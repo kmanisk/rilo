@@ -7,7 +7,7 @@ export function Select({ className, children, ...props }: SelectProps) {
   return (
     <select
       className={cn(
-        "flex h-8 w-full rounded-md border border-rilo-border bg-rilo-surface px-2.5 py-1 text-xs text-rilo-primary transition-colors focus-visible:outline-none focus-visible:border-rilo-accent cursor-pointer font-sans shadow-xs [&>option]:bg-rilo-surface [&>option]:text-rilo-primary",
+        "rilo-input flex h-8 w-full rounded-md border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none cursor-pointer font-sans shadow-xs [&>option]:bg-rilo-surface [&>option]:text-rilo-primary",
         className
       )}
       {...props}

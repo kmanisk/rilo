@@ -62,7 +62,7 @@ export default function SchedulerModal({ isOpen, onClose }: SchedulerModalProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 font-sans select-none">
+    <div className="fixed inset-0 z-50 bg-rilo-overlay backdrop-blur-xs flex items-center justify-center p-4 font-sans select-none">
       <div className="bg-rilo-surface border border-rilo-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden text-xs text-rilo-primary space-y-4 p-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-rilo-border pb-3">

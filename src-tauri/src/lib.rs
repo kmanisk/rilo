@@ -56,6 +56,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
         .setup(|app| {
             let app_data_dir = app
                 .path()
@@ -149,8 +150,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
             _ => {}
         })
@@ -180,7 +183,10 @@ pub fn run() {
             commands::update_download_extraction_config,
             commands::execute_system_action,
             commands::cancel_system_shutdown,
-            commands::open_details_window
+            commands::open_details_window,
+            commands::open_completion_window,
+            commands::open_test_window,
+            commands::start_file_drag
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
