@@ -5,6 +5,7 @@ node_modules/
 # Build Outputs
 dist/
 dist-isolation/
+target/
 src-tauri/target/
 
 # System / IDE Files
@@ -18,3 +19,8 @@ Thumbs.db
 downloads.db
 config.json
 *.tmp
+
+# Agent / AI instructions
+AGENTS.md
+agents_handoff.md
+codex.txt

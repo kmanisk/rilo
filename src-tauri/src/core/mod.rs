@@ -1,7 +1,6 @@
 pub mod archive;
 pub mod category;
 pub mod connection;
-pub mod db;
 pub mod destination;
 pub mod downloaditem;
 pub mod monitor;

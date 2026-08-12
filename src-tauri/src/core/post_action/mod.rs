@@ -11,12 +11,19 @@ pub enum PostDownloadAction {
 }
 
 impl PostDownloadAction {
-    pub fn parse(s: &str) -> Self {
+    pub fn parse(s: &str, custom_cmd: &str) -> Self {
         match s.to_lowercase().as_str() {
             "notify" => PostDownloadAction::Notify,
             "sleep" => PostDownloadAction::Sleep,
             "shutdown" => PostDownloadAction::Shutdown,
             "hibernate" => PostDownloadAction::Hibernate,
+            "command" => {
+                if !custom_cmd.trim().is_empty() {
+                    PostDownloadAction::RunCommand(custom_cmd.trim().to_string())
+                } else {
+                    PostDownloadAction::None
+                }
+            }
             other if other.starts_with("run:") => {
                 PostDownloadAction::RunCommand(other.trim_start_matches("run:").to_string())
             }
@@ -59,13 +66,36 @@ impl PostDownloadAction {
             }
             PostDownloadAction::RunCommand(cmd_str) => {
                 eprintln!("[POST ACTION] Running custom command: {}", cmd_str);
-                #[cfg(target_os = "windows")]
-                {
-                    let _ = Command::new("cmd")
-                        .args(["/C", cmd_str])
-                        .spawn();
+                let p = std::path::Path::new(cmd_str);
+                if p.exists() {
+                    let _ = Command::new(p).spawn();
+                } else {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let _ = Command::new("cmd")
+                            .args(["/C", cmd_str])
+                            .spawn();
+                    }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_post_download_action_parse() {
+        assert_eq!(PostDownloadAction::parse("notify", ""), PostDownloadAction::Notify);
+        assert_eq!(PostDownloadAction::parse("sleep", ""), PostDownloadAction::Sleep);
+        assert_eq!(PostDownloadAction::parse("shutdown", ""), PostDownloadAction::Shutdown);
+        assert_eq!(PostDownloadAction::parse("hibernate", ""), PostDownloadAction::Hibernate);
+        assert_eq!(
+            PostDownloadAction::parse("command", "C:\\script.bat"),
+            PostDownloadAction::RunCommand("C:\\script.bat".to_string())
+        );
+        assert_eq!(PostDownloadAction::parse("unknown", ""), PostDownloadAction::None);
     }
 }

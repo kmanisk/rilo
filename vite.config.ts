@@ -32,8 +32,20 @@ export default defineConfig({
         }
       : undefined,
     watch: {
-      // 3. tell vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Ignore Rust build output and Rust source code from Vite's frontend file watcher.
+      // Tauri/Cargo CLI manages Rust compilation and watching independently.
+      ignored: [
+        "**/target/**",
+        "target/**",
+        "**/src-tauri/target/**",
+        "src-tauri/target/**",
+        "**/src-tauri/gen/**",
+        "src-tauri/gen/**",
+        "**/crates/**/target/**",
+        "crates/**/target/**",
+        "**/src-tauri/**",
+        "**/.git/**",
+      ],
     },
   },
 });

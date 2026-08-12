@@ -42,6 +42,8 @@ pub async fn run_part_worker(
     cancel_token: CancellationToken,
     _etag: String,
     rate_limiter: RateLimiter,
+    global_rate_limiter: RateLimiter,
+    auth_cred: Option<(String, String)>,
 ) -> bool {
     let mut retries: u32 = 0;
     const MAX_RETRIES: u32 = 5;
@@ -73,9 +75,13 @@ pub async fn run_part_worker(
             range_header
         );
 
-        let req = client
+        let mut req = client
             .get(&url)
             .header(reqwest::header::RANGE, &range_header);
+
+        if let Some((ref user, ref pass)) = auth_cred {
+            req = req.basic_auth(user, Some(pass));
+        }
 
         let res = match req.send().await {
             Ok(r) => r,
@@ -147,6 +153,7 @@ pub async fn run_part_worker(
                     let chunk_len = chunk.len() as u64;
 
                     // Rilo Step 2: Token Bucket Rate Limiting per 8KB payload chunk
+                    global_rate_limiter.acquire(chunk_len).await;
                     rate_limiter.acquire(chunk_len).await;
 
                     if let Err(err) = file.write_all(&chunk).await {

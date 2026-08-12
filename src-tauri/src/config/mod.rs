@@ -10,6 +10,42 @@ pub struct AppConfig {
     pub appearance: AppearanceConfig,
 }
 
+fn default_connection_timeout() -> u32 {
+    30
+}
+
+fn default_proxy_mode() -> String {
+    "system".to_string()
+}
+
+fn default_active_days() -> Vec<String> {
+    vec![
+        "mon".to_string(),
+        "tue".to_string(),
+        "wed".to_string(),
+        "thu".to_string(),
+        "fri".to_string(),
+        "sat".to_string(),
+        "sun".to_string(),
+    ]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProxyConfig {
+    #[serde(default = "default_proxy_mode")]
+    pub mode: String,
+    #[serde(default)]
+    pub http_proxy: Option<String>,
+    #[serde(default)]
+    pub https_proxy: Option<String>,
+    #[serde(default)]
+    pub no_proxy: Option<String>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadConfig {
     pub download_directory: String,
@@ -17,12 +53,24 @@ pub struct DownloadConfig {
     pub max_connections_per_download: u32,
     pub retry_count: u32,
     pub retry_delay_seconds: u32,
+    #[serde(default = "default_connection_timeout")]
+    pub connection_timeout_seconds: u32,
     pub global_speed_limit_kbps: u64,
     pub auto_start: bool,
     #[serde(default)]
     pub auto_extract_archives: bool,
     #[serde(default)]
     pub delete_archive_after_extraction: bool,
+    #[serde(default)]
+    pub ignore_ssl_certificates: bool,
+    #[serde(default)]
+    pub default_user_agent: String,
+    #[serde(default)]
+    pub append_extension_incomplete: bool,
+    #[serde(default)]
+    pub check_disk_space: bool,
+    #[serde(default)]
+    pub proxy: ProxyConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,12 +78,22 @@ pub struct SchedulerConfig {
     pub schedule_enabled: bool,
     pub start_time: String,
     pub stop_time: String,
+    #[serde(default = "default_active_days")]
+    pub active_days: Vec<String>,
     pub post_download_action: String,
+    #[serde(default)]
+    pub custom_command: String,
+}
+
+fn default_mode() -> String {
+    "system".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceConfig {
     pub theme: String,
+    #[serde(default = "default_mode")]
+    pub mode: String,
     pub accent_color: String,
     pub font_family: String,
     pub font_size: String,
@@ -62,10 +120,16 @@ impl Default for DownloadConfig {
             max_connections_per_download: 4,
             retry_count: 3,
             retry_delay_seconds: 5,
+            connection_timeout_seconds: 30,
             global_speed_limit_kbps: 0,
             auto_start: false,
             auto_extract_archives: false,
             delete_archive_after_extraction: false,
+            ignore_ssl_certificates: false,
+            default_user_agent: String::new(),
+            append_extension_incomplete: false,
+            check_disk_space: true,
+            proxy: ProxyConfig::default(),
         }
     }
 }
@@ -76,7 +140,9 @@ impl Default for SchedulerConfig {
             schedule_enabled: false,
             start_time: "22:00".to_string(),
             stop_time: "06:00".to_string(),
+            active_days: default_active_days(),
             post_download_action: "none".to_string(),
+            custom_command: String::new(),
         }
     }
 }
@@ -85,6 +151,7 @@ impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
             theme: "rilo-default".to_string(),
+            mode: "system".to_string(),
             accent_color: "indigo".to_string(),
             font_family: "Inter".to_string(),
             font_size: "Default".to_string(),
@@ -104,6 +171,7 @@ impl AppConfig {
         self.download.max_connections_per_download = self.download.max_connections_per_download.clamp(1, 32);
         self.download.retry_count = self.download.retry_count.clamp(0, 10);
         self.download.retry_delay_seconds = self.download.retry_delay_seconds.clamp(1, 60);
+        self.download.connection_timeout_seconds = self.download.connection_timeout_seconds.clamp(5, 300);
 
         // Scheduler Validation
         if !validate_hhmm(&self.scheduler.start_time) {
@@ -113,7 +181,7 @@ impl AppConfig {
             self.scheduler.stop_time = "06:00".to_string();
         }
 
-        let valid_actions = ["none", "notify", "sleep", "shutdown"];
+        let valid_actions = ["none", "notify", "sleep", "shutdown", "hibernate", "command"];
         if !valid_actions.contains(&self.scheduler.post_download_action.as_str()) {
             self.scheduler.post_download_action = "none".to_string();
         }
@@ -123,6 +191,11 @@ impl AppConfig {
             self.appearance.theme = "rilo-default".to_string();
         } else if self.appearance.theme == "light" {
             self.appearance.theme = "github-light".to_string();
+        }
+
+        let valid_modes = ["system", "dark", "light"];
+        if !valid_modes.contains(&self.appearance.mode.to_lowercase().as_str()) {
+            self.appearance.mode = "system".to_string();
         }
 
         let valid_accents = ["indigo", "blue", "purple", "emerald", "green", "orange", "rose", "red"];

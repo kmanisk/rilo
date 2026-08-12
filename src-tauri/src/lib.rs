@@ -9,8 +9,6 @@ pub mod native_host;
 use config::AppConfig;
 use db::Database;
 use download::DownloadManager;
-use models::DownloadCommand;
-use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
@@ -77,8 +75,16 @@ pub fn run() {
 
             let app_config = AppConfig::load_or_create(&config_path);
 
-            let db = Database::init(&db_path).expect("Failed to initialize SQLite database");
-            let manager = DownloadManager::new(db.clone(), app_config, config_path);
+            let (db, manager) = tauri::async_runtime::block_on(async {
+                let db = Database::init(&db_path)
+                    .await
+                    .expect("Failed to initialize SQLite database");
+                let manager =
+                    DownloadManager::new(db.clone(), app_config, config_path, app_data_dir.clone())
+                        .await;
+                (db, manager)
+            });
+            manager.listen_events(app.handle().clone());
             app.manage(manager);
 
             // Start Queue Scheduler
@@ -107,22 +113,28 @@ pub fn run() {
                         }
                         "pause_all" => {
                             let state = app_handle.state::<DownloadManager>();
-                            let active_map = Arc::clone(&state.active_downloads);
+                            let mgr = state.inner().clone();
                             tauri::async_runtime::spawn(async move {
-                                let active = active_map.lock().await;
-                                for (tx, _token) in active.values() {
-                                    let _ = tx.send(DownloadCommand::Pause).await;
+                                if let Ok(records) = mgr.db.get_all().await {
+                                    for r in records {
+                                        if r.status.to_lowercase() == "downloading" {
+                                            let _ = mgr.pause_download(r.id).await;
+                                        }
+                                    }
                                 }
                             });
                         }
                         "quit" => {
                             let state = app_handle.state::<DownloadManager>();
-                            let active_map = Arc::clone(&state.active_downloads);
+                            let mgr = state.inner().clone();
                             let app_clone = app_handle.clone();
                             tauri::async_runtime::spawn(async move {
-                                let active = active_map.lock().await;
-                                for (tx, _token) in active.values() {
-                                    let _ = tx.send(DownloadCommand::Pause).await;
+                                if let Ok(records) = mgr.db.get_all().await {
+                                    for r in records {
+                                        if r.status.to_lowercase() == "downloading" {
+                                            let _ = mgr.pause_download(r.id).await;
+                                        }
+                                    }
                                 }
                                 sleep(Duration::from_millis(300)).await;
                                 app_clone.exit(0);
@@ -186,7 +198,11 @@ pub fn run() {
             commands::open_details_window,
             commands::open_completion_window,
             commands::open_test_window,
-            commands::start_file_drag
+            commands::start_file_drag,
+            commands::get_site_credentials,
+            commands::save_site_credential,
+            commands::delete_site_credential,
+            commands::test_proxy_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

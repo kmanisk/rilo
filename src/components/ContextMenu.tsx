@@ -305,17 +305,10 @@ export default function ContextMenu({
       className="fixed z-50 w-56 bg-rilo-elevated border border-rilo-border rounded-md shadow-2xl py-1 text-[12px] font-sans select-none animate-in fade-in duration-100"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Header: Truncated Filename */}
-      <div className="px-2.5 py-1 border-b border-rilo-border/60">
-        <span className="font-semibold text-rilo-primary truncate block text-[11px]" title={item.filename}>
-          {item.filename}
-        </span>
-      </div>
-
       {/* Menu Groups */}
       {menuGroups.map((group, groupIdx) => (
         <div key={`group-${groupIdx}`}>
-          {groupIdx > 0 && <div className="my-0.5 border-t border-rilo-border/60" />}
+          {groupIdx > 0 && <div className="my-0.5 border-t border-rilo-subtle" />}
           <div className="py-0.5">
             {group.map((menuItem) => {
               const currentIdx = overallItemIndex++;

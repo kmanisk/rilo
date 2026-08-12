@@ -18,8 +18,8 @@ pub struct ExtractionOptions {
     pub delete_after: bool,
 }
 
-pub fn extract_archive(
-    app: AppHandle,
+pub fn extract_archive<R: tauri::Runtime>(
+    app: AppHandle<R>,
     download_id: String,
     options: ExtractionOptions,
     cancel_flag: Arc<AtomicBool>,
@@ -108,8 +108,8 @@ pub fn extract_archive(
     }
 }
 
-fn emit_extraction_progress(
-    app: &AppHandle,
+fn emit_extraction_progress<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     download_id: &str,
     state: &str,
     progress_percent: f64,
@@ -130,8 +130,8 @@ fn emit_extraction_progress(
     let _ = app.emit("extraction-progress", payload);
 }
 
-fn extract_zip(
-    app: &AppHandle,
+fn extract_zip<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     download_id: &str,
     options: &ExtractionOptions,
     cancel_flag: &Arc<AtomicBool>,
@@ -197,8 +197,8 @@ fn extract_zip(
     Ok(())
 }
 
-fn extract_7z(
-    _app: &AppHandle,
+fn extract_7z<R: tauri::Runtime>(
+    _app: &AppHandle<R>,
     _download_id: &str,
     options: &ExtractionOptions,
     cancel_flag: &Arc<AtomicBool>,
@@ -245,8 +245,8 @@ fn extract_7z(
     }
 }
 
-fn extract_tar(
-    app: &AppHandle,
+fn extract_tar<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     download_id: &str,
     options: &ExtractionOptions,
     compression: Option<&str>,

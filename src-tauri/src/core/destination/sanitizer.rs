@@ -49,6 +49,43 @@ pub fn sanitize_filename(raw_name: &str) -> String {
     cleaned
 }
 
+#[cfg(target_os = "windows")]
+pub fn check_free_space(path: &std::path::Path, required_bytes: u64) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    let path_str = path.to_string_lossy();
+    let wide: Vec<u16> = std::ffi::OsStr::new(path_str.as_ref())
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let mut free_bytes_available: u64 = 0;
+    let mut total_number_of_bytes: u64 = 0;
+    let mut total_number_of_free_bytes: u64 = 0;
+
+    let res = unsafe {
+        windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut free_bytes_available as *mut u64,
+            &mut total_number_of_bytes as *mut u64,
+            &mut total_number_of_free_bytes as *mut u64,
+        )
+    };
+
+    if res != 0 && free_bytes_available > 0 && free_bytes_available < required_bytes {
+        return Err(format!(
+            "Insufficient disk space. Free: {} MB, Required: {} MB",
+            free_bytes_available / (1024 * 1024),
+            required_bytes / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn check_free_space(_path: &std::path::Path, _required_bytes: u64) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 

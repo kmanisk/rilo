@@ -1,4 +1,4 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -6,7 +6,7 @@ import { DownloadItem, DownloadProgressPayload, DownloadRecord, ExtractionProgre
 import { applyExtractionProgress, progressToDownloadItem, recordToDownloadItem } from "../lib/downloads/mapping";
 import DownloadDetailsModal from "./DownloadDetailsModal";
 import { AppConfig } from "./SettingsModal";
-import { applyVisualSettings } from "../lib/settings/visual";
+import { applyVisualSettings, AppearanceSettings } from "../lib/settings/visual";
 import { Loader2 } from "lucide-preact";
 
 interface DetailsStandaloneViewProps {
@@ -70,14 +70,21 @@ export default function DetailsStandaloneView({ downloadId }: DetailsStandaloneV
     };
   }, [downloadId]);
 
-  // Live Theme Switching Listener
+  // Live Theme & System Appearance Listener
+  const activeAppearanceRef = useRef<AppearanceSettings | null>(null);
+
   useEffect(() => {
     let unlistenTheme: UnlistenFn | undefined;
 
     async function setupThemeListener() {
       try {
+        const appConfig = await invoke<AppConfig>("get_app_config");
+        activeAppearanceRef.current = appConfig.appearance;
         unlistenTheme = await listen<any>("rilo-appearance-changed", (event) => {
-          applyVisualSettings(event.payload);
+          if (event.payload) {
+            activeAppearanceRef.current = event.payload;
+            applyVisualSettings(event.payload);
+          }
         });
       } catch (err) {
         console.error("Failed setting theme listener in details window:", err);
@@ -86,8 +93,27 @@ export default function DetailsStandaloneView({ downloadId }: DetailsStandaloneV
 
     setupThemeListener();
 
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemChange = () => {
+      const mode = activeAppearanceRef.current?.mode || "system";
+      if (mode === "system" && activeAppearanceRef.current) {
+        applyVisualSettings(activeAppearanceRef.current);
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleSystemChange);
+    } else {
+      mediaQuery.addListener(handleSystemChange);
+    }
+
     return () => {
       if (unlistenTheme) unlistenTheme();
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleSystemChange);
+      } else {
+        mediaQuery.removeListener(handleSystemChange);
+      }
     };
   }, []);
 

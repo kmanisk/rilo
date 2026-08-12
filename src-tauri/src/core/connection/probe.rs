@@ -67,7 +67,7 @@ pub fn extract_filename_from_url(url_str: &str) -> Option<String> {
     }
 }
 
-pub async fn probe_url(client: &reqwest::Client, url: &str) -> ResponseProbeInfo {
+pub async fn probe_url(client: &reqwest::Client, url: &str, db: Option<&crate::db::Database>) -> ResponseProbeInfo {
     let mut total_bytes: u64 = 0;
     let mut etag = String::new();
     let mut last_modified = String::new();
@@ -77,8 +77,18 @@ pub async fn probe_url(client: &reqwest::Client, url: &str) -> ResponseProbeInfo
     let mut supports_range = false;
     let mut suggested_filename = None;
 
+    let auth_cred = match db {
+        Some(d) => d.find_credential_for_url(url).await.ok().flatten(),
+        None => None,
+    };
+
     // Try HEAD request first for fast metadata, filename & redirect resolution
-    if let Ok(head_res) = client.head(url).send().await {
+    let mut head_req = client.head(url);
+    if let Some(ref cred) = auth_cred {
+        head_req = head_req.basic_auth(&cred.username, Some(&cred.password));
+    }
+
+    if let Ok(head_res) = head_req.send().await {
         redirect_url = head_res.url().to_string();
 
         if let Some(cd) = head_res.headers().get(reqwest::header::CONTENT_DISPOSITION) {
@@ -118,12 +128,14 @@ pub async fn probe_url(client: &reqwest::Client, url: &str) -> ResponseProbeInfo
     }
 
     // Fallback partial GET probe: essential for GitHub releases, tokenized URLs, and CDNs rejecting HEAD
-    if let Ok(range_test) = client
+    let mut get_req = client
         .get(&redirect_url)
-        .header(reqwest::header::RANGE, "bytes=0-0")
-        .send()
-        .await
-    {
+        .header(reqwest::header::RANGE, "bytes=0-0");
+    if let Some(ref cred) = auth_cred {
+        get_req = get_req.basic_auth(&cred.username, Some(&cred.password));
+    }
+
+    if let Ok(range_test) = get_req.send().await {
         redirect_url = range_test.url().to_string();
         let status = range_test.status();
 

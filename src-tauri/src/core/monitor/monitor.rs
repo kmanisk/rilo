@@ -11,13 +11,13 @@ pub const EMA_ALPHA: f64 = 0.25;
 pub const WARMUP_SAMPLES: usize = 20; // 20 samples @ 100ms = 2.0s warmup before displaying ETA
 pub const UI_EMIT_INTERVAL_MS: u64 = 1000; // Throttle UI progress emission to once per second (1000ms)
 
-pub fn emit_progress_event(app: &AppHandle, payload: DownloadProgressPayload) {
+pub fn emit_progress_event<R: tauri::Runtime>(app: &AppHandle<R>, payload: DownloadProgressPayload) {
     let _ = app.emit("download-progress", payload);
 }
 
 /// Rilo Core Monitor: Smoothed Speed, Segment Breakdown & ETA Monitor Task
-pub async fn run_100ms_progress_monitor(
-    app: AppHandle,
+pub async fn run_100ms_progress_monitor<R: tauri::Runtime>(
+    app: AppHandle<R>,
     download_id: String,
     filename: String,
     save_path: String,

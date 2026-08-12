@@ -39,6 +39,8 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const completedTrackedRef = useRef<Set<string>>(new Set());
 
+  const activeAppearanceRef = useRef<AppearanceSettings | null>(null);
+
   const handleSelectTheme = async (themeId: string) => {
     try {
       setCurrentThemeId(themeId);
@@ -50,6 +52,7 @@ export default function App() {
           theme: themeId,
         },
       };
+      activeAppearanceRef.current = updatedConfig.appearance;
       applyVisualSettings(updatedConfig.appearance);
       await invoke("update_app_config", { config: updatedConfig });
       emit("rilo-appearance-changed", updatedConfig.appearance).catch(() => {});
@@ -64,6 +67,7 @@ export default function App() {
     async function initAppearance() {
       try {
         const appConfig = await invoke<AppConfig>("get_app_config");
+        activeAppearanceRef.current = appConfig.appearance;
         applyVisualSettings(appConfig.appearance);
         if (appConfig.appearance.theme) {
           setCurrentThemeId(appConfig.appearance.theme);
@@ -76,14 +80,36 @@ export default function App() {
 
     let unlisten: (() => void) | undefined;
     listen<AppearanceSettings>("rilo-appearance-changed", (event) => {
-      if (event.payload?.theme) {
-        setCurrentThemeId(event.payload.theme);
+      if (event.payload) {
+        activeAppearanceRef.current = event.payload;
+        if (event.payload.theme) {
+          setCurrentThemeId(event.payload.theme);
+        }
+        applyVisualSettings(event.payload);
       }
-      applyVisualSettings(event.payload);
     }).then((un) => { unlisten = un; }).catch(() => {});
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleSystemChange = () => {
+      const mode = activeAppearanceRef.current?.mode || "system";
+      if (mode === "system" && activeAppearanceRef.current) {
+        applyVisualSettings(activeAppearanceRef.current);
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleSystemChange);
+    } else {
+      mediaQuery.addListener(handleSystemChange);
+    }
 
     return () => {
       if (unlisten) unlisten();
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleSystemChange);
+      } else {
+        mediaQuery.removeListener(handleSystemChange);
+      }
     };
   }, []);
 
@@ -241,56 +267,34 @@ export default function App() {
     extractDir = "",
     deleteArchiveAfterExtract = false
   ) => {
-    const downloadId = `dl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const newItem: DownloadItem = {
-      id: downloadId,
-      url,
-      filename: "Initializing...",
-      savePath: customPath || "Downloads",
-      bytesDownloaded: 0,
-      totalBytes: 0,
-      status: queueOnly ? "queued" : "downloading",
-      startTime: Date.now(),
-      speedBps: 0,
-      activeThreads: connections || 4,
-      resumable: true,
-      autoExtract,
-      extractDir,
-      deleteArchiveAfterExtract,
-      extractionState: "Pending",
-    };
-
-    setDownloads((prev) => ({ ...prev, [downloadId]: newItem }));
-    setSelectedItem(newItem);
-
     try {
+      const record = await invoke<DownloadRecord>("start_download", {
+        url,
+        customPath: customPath || null,
+        numConnections: connections || 4,
+      });
+
+      const newItem = recordToDownloadItem(record);
+      newItem.autoExtract = autoExtract;
+      newItem.extractDir = extractDir;
+      newItem.deleteArchiveAfterExtract = deleteArchiveAfterExtract;
+
+      setDownloads((prev) => ({ ...prev, [record.id]: newItem }));
+      setSelectedItem(newItem);
+
       if (autoExtract || extractDir || deleteArchiveAfterExtract) {
         await invoke("update_download_extraction_config", {
-          downloadId,
+          downloadId: record.id,
           autoExtract,
           extractDir: extractDir || null,
           deleteAfter: deleteArchiveAfterExtract,
         });
       }
 
-      await invoke("start_download", {
-        downloadId,
-        url,
-        customPath: customPath || null,
-        numConnections: connections || 4,
-      });
       showNotification("Download task started");
     } catch (err: any) {
       console.error("Failed starting download:", err);
       showNotification(`Error: ${err?.message || err}`);
-      setDownloads((prev) => {
-        const item = prev[downloadId];
-        if (!item) return prev;
-        return {
-          ...prev,
-          [downloadId]: { ...item, status: "error", errorMessage: String(err) },
-        };
-      });
     }
   };
 
