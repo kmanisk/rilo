@@ -157,15 +157,27 @@ pub async fn check_file_exists(path: String) -> Result<bool, String> {
 pub async fn get_app_config(
     state: State<'_, DownloadManager>,
 ) -> Result<AppConfig, String> {
-    let cfg = state.app_config.lock().await;
+    let mut cfg = state.app_config.lock().await;
+    if cfg.download.download_directory.trim().is_empty() {
+        if let Some(user_downloads) = dirs::download_dir() {
+            cfg.download.download_directory = user_downloads.to_string_lossy().to_string();
+        }
+    }
+    eprintln!("[SETTINGS-LOAD] default_download_folder={}", cfg.download.download_directory);
     Ok(cfg.clone())
 }
 
 #[tauri::command]
 pub async fn update_app_config(
     state: State<'_, DownloadManager>,
-    config: AppConfig,
+    mut config: AppConfig,
 ) -> Result<(), String> {
+    config.validate();
+    if config.download.download_directory.trim().is_empty() {
+        if let Some(user_downloads) = dirs::download_dir() {
+            config.download.download_directory = user_downloads.to_string_lossy().to_string();
+        }
+    }
     let mut cfg = state.app_config.lock().await;
     *cfg = config.clone();
 
@@ -178,7 +190,15 @@ pub async fn update_app_config(
 
     if config.download.global_speed_limit_kbps > 0 {
         state.core.download_manager.set_global_speed_limit(config.download.global_speed_limit_kbps * 1024).await;
+    } else {
+        state.core.download_manager.set_global_speed_limit(0).await;
     }
+
+    eprintln!(
+        "[SETTINGS-SAVE] default_download_folder={} use_category={}",
+        config.download.download_directory,
+        config.download.use_category_by_default
+    );
 
     Ok(())
 }
@@ -187,7 +207,10 @@ pub async fn update_app_config(
 pub async fn reset_app_config(
     state: State<'_, DownloadManager>,
 ) -> Result<AppConfig, String> {
-    let default_config = AppConfig::default();
+    let mut default_config = AppConfig::default();
+    if let Some(user_downloads) = dirs::download_dir() {
+        default_config.download.download_directory = user_downloads.to_string_lossy().to_string();
+    }
     let mut cfg = state.app_config.lock().await;
     *cfg = default_config.clone();
 
@@ -195,6 +218,7 @@ pub async fn reset_app_config(
         let _ = tokio::fs::write(&state.config_path, json).await;
     }
 
+    eprintln!("[SETTINGS-RESET] default_download_folder={}", default_config.download.download_directory);
     Ok(default_config)
 }
 

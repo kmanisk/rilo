@@ -180,50 +180,46 @@ impl DownloadManager {
         info!("Probing URL: {}", url);
         
         // Try HEAD first
-        let response = self.client.head(url.as_str()).send().await?;
-        
-        // Check for authentication required
-        let status = response.status();
-        if status.as_u16() == 401 || status.as_u16() == 403 {
-            info!("URL requires authentication (HTTP {})", status.as_u16());
-            let filename = url.path_segments()
-                .and_then(|s| s.last())
-                .unwrap_or("download")
-                .to_string();
-            return Ok(LinkInfo {
-                url: url.to_string(),
-                final_url: Some(response.url().to_string()),
-                filename,
-                size: None,
-                content_type: None,
-                resumable: false,
-                error: None,
-                requires_auth: true,
-            });
+        let head_res = self.client.head(url.as_str()).send().await;
+        let mut final_url = url.to_string();
+        let mut size = None;
+        let mut content_type = None;
+        let mut resumable = false;
+        let mut head_ok = false;
+        let mut cd_header: Option<String> = None;
+
+        if let Ok(response) = head_res {
+            let status = response.status();
+            if status.is_success() || status.as_u16() == 206 {
+                head_ok = true;
+                final_url = response.url().to_string();
+                size = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse().ok());
+                content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+                resumable = response
+                    .headers()
+                    .get(reqwest::header::ACCEPT_RANGES)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s == "bytes")
+                    .unwrap_or(false);
+                cd_header = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_DISPOSITION)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string());
+            }
         }
         
-        let final_url = response.url().to_string();
-        let mut size = response
-            .headers()
-            .get(reqwest::header::CONTENT_LENGTH)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok());
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
-        let mut resumable = response
-            .headers()
-            .get(reqwest::header::ACCEPT_RANGES)
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s == "bytes")
-            .unwrap_or(false);
-        
-        // If HEAD didn't give us size, try a GET with Range header to get more info
-        // This is needed for GitHub releases and similar CDNs
-        if size.is_none() {
-            info!("HEAD didn't return Content-Length, trying partial GET...");
+        // If HEAD failed or didn't return size, try a GET with Range header to get more info
+        if !head_ok || size.is_none() {
+            info!("HEAD failed or didn't return Content-Length, trying partial GET...");
             match self.client
                 .get(&final_url)
                 .header(reqwest::header::RANGE, "bytes=0-0")
@@ -233,6 +229,24 @@ impl DownloadManager {
                 Ok(range_response) => {
                     let status = range_response.status();
                     info!("Partial GET response status: {}", status);
+
+                    if status.as_u16() == 401 || status.as_u16() == 403 {
+                        info!("URL requires authentication (HTTP {})", status.as_u16());
+                        let filename = url.path_segments()
+                            .and_then(|s| s.last())
+                            .unwrap_or("download")
+                            .to_string();
+                        return Ok(LinkInfo {
+                            url: url.to_string(),
+                            final_url: Some(range_response.url().to_string()),
+                            filename,
+                            size: None,
+                            content_type: None,
+                            resumable: false,
+                            error: None,
+                            requires_auth: true,
+                        });
+                    }
                     
                     // Check Content-Range header for total size: "bytes 0-0/12345"
                     if let Some(content_range) = range_response.headers().get(reqwest::header::CONTENT_RANGE) {
@@ -279,10 +293,8 @@ impl DownloadManager {
             }
         }
         
-        let filename = response
-            .headers()
-            .get(reqwest::header::CONTENT_DISPOSITION)
-            .and_then(|v| v.to_str().ok())
+        let filename = cd_header
+            .as_deref()
             .and_then(|v| {
                 v.split("filename=")
                     .nth(1)

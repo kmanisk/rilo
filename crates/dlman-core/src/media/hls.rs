@@ -44,6 +44,7 @@ impl HlsHandler {
             return Err(DlmanError::ServerError {
                 status: response.status().as_u16(),
                 message: format!("Failed to fetch HLS playlist: {}", url),
+                retry_after: None,
             });
         }
         let text = response.text().await?;

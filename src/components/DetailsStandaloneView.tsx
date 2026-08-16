@@ -202,7 +202,6 @@ export default function DetailsStandaloneView({ downloadId }: DetailsStandaloneV
     try {
       await invoke("delete_download_file", {
         downloadId: targetItem.id,
-        filePath: targetItem.savePath,
       });
       handleCloseWindow();
     } catch (err) {

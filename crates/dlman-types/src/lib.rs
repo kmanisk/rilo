@@ -396,7 +396,7 @@ impl Default for Settings {
             start_on_boot: false,
             browser_integration_port: 7899,
             remember_last_path: true,
-            max_retries: 5,
+            max_retries: 20,
             retry_delay_seconds: 30,
             proxy: ProxySettings::default(),
             temp_storage: TempStorageSettings::default(),

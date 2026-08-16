@@ -571,6 +571,35 @@ impl DownloadDatabase {
         
         Ok(())
     }
+
+    /// Update segment bounds and progress (used when segments are dynamically split or updated)
+    pub async fn update_segment_bounds_and_progress(
+        &self,
+        download_id: Uuid,
+        segment_index: u32,
+        start_byte: u64,
+        end_byte: u64,
+        downloaded_bytes: u64,
+        complete: bool,
+    ) -> Result<(), DlmanError> {
+        sqlx::query(
+            r#"
+            UPDATE segments
+            SET start_byte = ?, end_byte = ?, downloaded_bytes = ?, complete = ?
+            WHERE download_id = ? AND segment_index = ?
+            "#,
+        )
+        .bind(start_byte as i64)
+        .bind(end_byte as i64)
+        .bind(downloaded_bytes as i64)
+        .bind(if complete { 1i64 } else { 0i64 })
+        .bind(download_id.to_string())
+        .bind(segment_index as i64)
+        .execute(&self.pool)
+        .await?;
+        
+        Ok(())
+    }
     
     /// Update download progress (sum of all segments)
     pub async fn update_download_progress(

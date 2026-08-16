@@ -62,6 +62,8 @@ pub struct DownloadConfig {
     #[serde(default)]
     pub delete_archive_after_extraction: bool,
     #[serde(default)]
+    pub use_category_by_default: bool,
+    #[serde(default)]
     pub ignore_ssl_certificates: bool,
     #[serde(default)]
     pub default_user_agent: String,
@@ -125,6 +127,7 @@ impl Default for DownloadConfig {
             auto_start: false,
             auto_extract_archives: false,
             delete_archive_after_extraction: false,
+            use_category_by_default: false,
             ignore_ssl_certificates: false,
             default_user_agent: String::new(),
             append_extension_incomplete: false,

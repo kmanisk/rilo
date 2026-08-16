@@ -12,6 +12,7 @@ struct TestHttpServer {
     pub addr: String,
     pub payload_small: Vec<u8>,
     pub payload_large: Vec<u8>,
+    #[allow(dead_code)]
     pub fail_count: Arc<AtomicUsize>,
 }
 
@@ -81,6 +82,108 @@ impl TestHttpServer {
                         return;
                     }
 
+                    if path.starts_with("/head_403") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                    }
+
+                    if path.starts_with("/head_405") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                    }
+
+                    if path.starts_with("/head_200_nosize") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 200 OK\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                    }
+
+                    if path.starts_with("/auth_403") {
+                        let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = socket.write_all(res.as_bytes()).await;
+                        return;
+                    }
+
+                    if path.starts_with("/auth_401") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                        } else {
+                            let res = "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                        }
+                        return;
+                    }
+
+                    if path.starts_with("/bzzhr_strict") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                        if range_header.as_deref() == Some("bytes=0-0") {
+                            let res = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                    }
+
+                    if path.starts_with("/cd_real_get") {
+                        if method == "HEAD" {
+                            let res = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                                small.len()
+                            );
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                    }
+
+                    if path.starts_with("/unknown_stream") {
+                        if method == "HEAD" {
+                            let res = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                        if range_header.is_some() {
+                            let res = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                            let _ = socket.write_all(res.as_bytes()).await;
+                            return;
+                        }
+                        let header = "HTTP/1.1 200 OK\r\nAccept-Ranges: none\r\nConnection: close\r\n\r\n";
+                        let _ = socket.write_all(header.as_bytes()).await;
+                        let _ = socket.write_all(&small).await;
+                        return;
+                    }
+
+                    if path.starts_with("/always_503") {
+                        let res = "HTTP/1.1 503 Service Unavailable\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        let _ = socket.write_all(res.as_bytes()).await;
+                        return;
+                    }
+
+                    if path.starts_with("/seg_429_mix") {
+                        if let Some(ref range) = range_header {
+                            // Check if this is segment 2 (roughly 1.5MB to 2.25MB in a 3MB file)
+                            if range.contains("1572864-") || range.contains("1572864-2359295") {
+                                let count = fail_cnt.fetch_add(1, Ordering::SeqCst);
+                                if count == 0 {
+                                    let res = "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                                    let _ = socket.write_all(res.as_bytes()).await;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
                     if path.starts_with("/rate_limit") {
                         let count = fail_cnt.fetch_add(1, Ordering::SeqCst);
                         if count < 2 {
@@ -101,7 +204,7 @@ impl TestHttpServer {
 
                     let (target_payload, is_norange) = if path.starts_with("/norange") {
                         (&small, true)
-                    } else if path.starts_with("/large") {
+                    } else if path.starts_with("/large") || path.starts_with("/seg_429_mix") {
                         (&large, false)
                     } else {
                         (&small, false)
@@ -141,6 +244,14 @@ impl TestHttpServer {
                         return;
                     }
 
+                    let cd_get_header = if path.starts_with("/cd_real_get") {
+                        "Content-Disposition: attachment; filename=\"discovered_on_get.zip\"\r\n"
+                    } else if path.starts_with("/cd_test") {
+                        "Content-Disposition: attachment; filename=\"authoritative_archive.rar\"\r\n"
+                    } else {
+                        ""
+                    };
+
                     if let Some(ref range) = range_header {
                         if let Some(spec) = range.strip_prefix("bytes=") {
                             let range_parts: Vec<&str> = spec.split('-').collect();
@@ -155,8 +266,8 @@ impl TestHttpServer {
                             if start <= end {
                                 let chunk = &target_payload[start..=end];
                                 let header = format!(
-                                    "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {}-{}/{}\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
-                                    start, end, total_len, chunk.len()
+                                    "HTTP/1.1 206 Partial Content\r\n{}Content-Range: bytes {}-{}/{}\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                                    cd_get_header, start, end, total_len, chunk.len()
                                 );
                                 let _ = socket.write_all(header.as_bytes()).await;
                                 let _ = socket.write_all(chunk).await;
@@ -165,9 +276,15 @@ impl TestHttpServer {
                         }
                     }
 
+                    let cd_get_header = if path.starts_with("/cd_real_get") {
+                        "Content-Disposition: attachment; filename=\"discovered_on_get.zip\"\r\n"
+                    } else {
+                        ""
+                    };
+
                     let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
-                        total_len
+                        "HTTP/1.1 200 OK\r\n{}Content-Length: {}\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n",
+                        cd_get_header, total_len
                     );
                     let _ = socket.write_all(header.as_bytes()).await;
                     let _ = socket.write_all(target_payload).await;
@@ -603,7 +720,7 @@ async fn test_real_external_download_hetzner() {
 
     let download_id = uuid::Uuid::parse_str(&record.id).unwrap();
     let mut bytes_downloaded = 0u64;
-    for _ in 0..100 {
+    for _ in 0..300 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         if let Ok(dl) = manager.core.get_download(download_id).await {
             bytes_downloaded = dl.downloaded;
@@ -792,3 +909,422 @@ async fn test_content_disposition_filename_resolution() {
     let output_file = dest_dir.join(&updated_dl.filename);
     assert!(output_file.exists(), "Final file with resolved filename does not exist");
 }
+
+#[tokio::test]
+async fn test_probe_head_403_fallback_get_range_succeeds() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/head_403/bzzhr_style_download.rar", server.addr);
+    let dest_dir = temp_dir.path().join("dest_probe_fallback");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 15).await;
+    assert!(completed, "Probe fallback for HEAD 403 failed to complete download");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Completed);
+    assert_eq!(updated_dl.downloaded, server.payload_small.len() as u64);
+}
+
+#[tokio::test]
+async fn test_probe_head_405_fallback_succeeds() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/head_405/video.mp4", server.addr);
+    let dest_dir = temp_dir.path().join("dest_probe_405");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir, Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 15).await;
+    assert!(completed, "Probe fallback for HEAD 405 failed");
+}
+
+#[tokio::test]
+async fn test_probe_head_200_nosize_fallback_discovers_size() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/head_200_nosize/data.bin", server.addr);
+    let dest_dir = temp_dir.path().join("dest_nosize");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir, Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 15).await;
+    assert!(completed, "Probe fallback for HEAD 200 without size failed");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.size, Some(server.payload_small.len() as u64));
+}
+
+#[tokio::test]
+async fn test_probe_auth_required_when_both_head_and_get_fail_403() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/auth_403/protected.zip", server.addr);
+    let dest_dir = temp_dir.path().join("dest_auth_403");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir, Uuid::nil(), None, None, true).await.unwrap();
+    let failed = wait_for_status(&core, download.id, DownloadStatus::Failed, 15).await;
+    assert!(failed, "Task did not fail on genuine 403 authentication error");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert!(updated_dl.error.as_deref().unwrap_or("").contains("Authentication required"));
+}
+
+#[tokio::test]
+async fn test_probe_auth_required_when_get_returns_401() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/auth_401/protected.zip", server.addr);
+    let dest_dir = temp_dir.path().join("dest_auth_401");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir, Uuid::nil(), None, None, true).await.unwrap();
+    let failed = wait_for_status(&core, download.id, DownloadStatus::Failed, 15).await;
+    assert!(failed, "Task did not fail on 401 GET authentication error");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert!(updated_dl.error.as_deref().unwrap_or("").contains("Authentication required"));
+}
+
+#[tokio::test]
+async fn test_bzzhr_strict_head_403_range_403_get_200_succeeds() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/bzzhr_strict/file.rar", server.addr);
+    let dest_dir = temp_dir.path().join("dest_bzzhr");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 20).await;
+    assert!(completed, "BZZHR-style download (HEAD 403, Range 403, GET 200) failed to complete");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Completed);
+    let output_file = dest_dir.join(&updated_dl.filename);
+    assert_eq!(std::fs::read(&output_file).unwrap(), server.payload_small);
+}
+
+#[tokio::test]
+async fn test_multi_segment_429_backoff_and_healthy_workers_continue() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/seg_429_mix/large_429.bin", server.addr);
+    let dest_dir = temp_dir.path().join("dest_seg_429");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    // 4-segment download on 3MB payload
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 25).await;
+    assert!(completed, "Multi-segment download with 429 backoff failed to complete");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Completed);
+    let output_file = dest_dir.join(&updated_dl.filename);
+    let contents = std::fs::read(&output_file).unwrap();
+    assert_eq!(contents.len(), server.payload_large.len());
+    assert_eq!(contents, server.payload_large);
+}
+
+#[tokio::test]
+async fn test_content_disposition_resolved_on_real_get() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/cd_real_get/unnamed_opaque", server.addr);
+    let dest_dir = temp_dir.path().join("dest_cd_get");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 20).await;
+    assert!(completed, "Download for CD on real GET failed");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.filename, "discovered_on_get.zip");
+    let output_file = dest_dir.join(&updated_dl.filename);
+    assert!(output_file.exists());
+    assert_eq!(std::fs::read(&output_file).unwrap(), server.payload_small);
+}
+
+#[tokio::test]
+async fn test_unknown_size_stream_single_download() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/unknown_stream/stream.bin", server.addr);
+    let dest_dir = temp_dir.path().join("dest_unknown_stream");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 20).await;
+    assert!(completed, "Unknown size stream download failed");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Completed);
+    let output_file = dest_dir.join(&updated_dl.filename);
+    assert_eq!(std::fs::read(&output_file).unwrap(), server.payload_small);
+}
+
+#[tokio::test]
+async fn test_corrupt_oversized_part_file_recovery() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/large.bin?t=corrupt_test", server.addr);
+    let dest_dir = temp_dir.path().join("dest_corrupt");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    // Start download, let probe complete
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+
+    // Create an oversized corrupt .part file for segment 0 (e.g. 50MB garbage)
+    let scratch_dir = data_dir.join("temp");
+    tokio::fs::create_dir_all(&scratch_dir).await.unwrap();
+    let part_path = scratch_dir.join(format!("{}_segment_0.part", download.id));
+    std::fs::write(&part_path, vec![0xFFu8; 10 * 1024 * 1024]).unwrap(); // 10MB > 768KB expected segment
+
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 25).await;
+    assert!(completed, "Corrupt part file recovery failed to complete");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Completed);
+    let output_file = dest_dir.join(&updated_dl.filename);
+    let contents = std::fs::read(&output_file).unwrap();
+    assert_eq!(contents.len(), server.payload_large.len());
+    assert_eq!(contents, server.payload_large);
+}
+
+#[tokio::test]
+async fn test_retry_exhaustion_transitions_to_failed() {
+    let server = TestHttpServer::start().await;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let url = format!("{}/always_503/error.bin", server.addr);
+    let dest_dir = temp_dir.path().join("dest_always_503");
+    tokio::fs::create_dir_all(&dest_dir).await.unwrap();
+
+    let download = core.add_download(&url, dest_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let failed = wait_for_status(&core, download.id, DownloadStatus::Failed, 25).await;
+    assert!(failed, "Download did not fail after retry exhaustion");
+
+    let updated_dl = core.get_download(download.id).await.unwrap();
+    assert_eq!(updated_dl.status, DownloadStatus::Failed);
+}
+
+#[tokio::test]
+async fn test_two_minute_disk_test_hetzner_trace() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let db_path = temp_dir.path().join("test_hetzner_trace.db");
+    let config_path = temp_dir.path().join("config.json");
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads");
+    tokio::fs::create_dir_all(&save_dir).await.unwrap();
+
+    let db = downloader_lib::db::Database::init(&db_path).await.unwrap();
+    let config = downloader_lib::config::AppConfig::default();
+
+    let manager = downloader_lib::download::manager::DownloadManager::new(
+        db,
+        config,
+        config_path,
+        data_dir.clone(),
+    )
+    .await;
+
+    let mut event_rx = manager.core.subscribe();
+
+    let url = "https://ash-speed.hetzner.com/100MB.bin".to_string();
+    println!("\n============================================================");
+    println!("PHASE 1: THE TWO-MINUTE DISK TEST STARTING");
+    println!("URL: {}", url);
+    println!("Segments: 4");
+    println!("============================================================");
+
+    let record = manager
+        .start_download(
+            None,
+            url.clone(),
+            Some(save_dir.to_string_lossy().to_string()),
+            None,
+            Some(4),
+            false,
+        )
+        .await;
+
+    assert!(record.is_ok(), "Failed starting download: {:?}", record.err());
+    let record = record.unwrap();
+    let download_id = uuid::Uuid::parse_str(&record.id).unwrap();
+    println!("Download UUID: {}", download_id);
+
+    let scratch_dir = data_dir.join("temp");
+    tokio::fs::create_dir_all(&scratch_dir).await.unwrap();
+
+    let start_instant = std::time::Instant::now();
+    let mut last_sample = std::time::Instant::now();
+
+    let mut backend_event_downloaded = 0u64;
+    let mut backend_event_speed = 0u64;
+    let mut backend_event_total = 0u64;
+    let mut segment_event_counts = [0usize; 4];
+    let mut segment_event_bytes = [0u64; 4];
+    let mut is_completed = false;
+
+    println!("\n{:<6} | {:<12} | {:<12} | {:<12} | {:<10} | {:<8} | {:<20} | {:<20} | {:<20} | {:<20}",
+             "TIME", "DISK BYTES", "BACKEND EVT", "TAURI BYTES", "SPEED", "UI %", "SEG 0 (DISK)", "SEG 1 (DISK)", "SEG 2 (DISK)", "SEG 3 (DISK)");
+    println!("{:-<160}", "");
+
+    let mut _samples = 0;
+    while start_instant.elapsed().as_secs() < 120 {
+        // Drain events non-blockingly
+        while let Ok(evt) = event_rx.try_recv() {
+            match evt {
+                dlman_types::CoreEvent::DownloadProgress { id, downloaded, total, speed, .. } if id == download_id => {
+                    backend_event_downloaded = downloaded;
+                    backend_event_speed = speed;
+                    if let Some(t) = total { backend_event_total = t; }
+                }
+                dlman_types::CoreEvent::SegmentProgress { download_id: id, segment_index, downloaded } if id == download_id => {
+                    if (segment_index as usize) < 4 {
+                        segment_event_counts[segment_index as usize] += 1;
+                        segment_event_bytes[segment_index as usize] = downloaded;
+                    }
+                }
+                dlman_types::CoreEvent::DownloadStatusChanged { id, status, .. } if id == download_id => {
+                    if status == DownloadStatus::Completed {
+                        is_completed = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if last_sample.elapsed().as_millis() >= 250 {
+            last_sample = std::time::Instant::now();
+            let elapsed_sec = start_instant.elapsed().as_secs_f64();
+
+            // Read disk .part file sizes
+            let mut seg_sizes = [0u64; 4];
+            for i in 0..4 {
+                let part_path = scratch_dir.join(format!("{}_segment_{}.part", download_id, i));
+                if let Ok(meta) = std::fs::metadata(&part_path) {
+                    seg_sizes[i] = meta.len();
+                }
+            }
+            let disk_total: u64 = seg_sizes.iter().sum();
+
+            let total_bytes = if backend_event_total > 0 { backend_event_total } else { 104857600 };
+            let ui_percent = if total_bytes > 0 {
+                (backend_event_downloaded as f64 / total_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            println!("{:<6.2} | {:<12} | {:<12} | {:<12} | {:<10} | {:<7.2}% | {:<20} | {:<20} | {:<20} | {:<20}",
+                     elapsed_sec, disk_total, backend_event_downloaded, backend_event_downloaded, backend_event_speed, ui_percent,
+                     seg_sizes[0], seg_sizes[1], seg_sizes[2], seg_sizes[3]);
+
+            _samples += 1;
+            if is_completed {
+                println!("\n>>> DOWNLOAD REACHED COMPLETED STATUS! <<<");
+                break;
+            }
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+
+    let final_file = save_dir.join("100MB.bin");
+    let final_exists = final_file.exists();
+    let final_size = if final_exists { std::fs::metadata(&final_file).unwrap().len() } else { 0 };
+
+    println!("\n============================================================");
+    println!("PHASE 1 SUMMARY:");
+    println!("Final file exists: {}", final_exists);
+    println!("Final file size: {} bytes (expected 104857600)", final_size);
+    println!("Total SegmentProgress events received: seg0={}, seg1={}, seg2={}, seg3={}",
+             segment_event_counts[0], segment_event_counts[1], segment_event_counts[2], segment_event_counts[3]);
+    println!("============================================================");
+
+    assert!(final_exists, "Final merged file was not created");
+    assert_eq!(final_size, 104857600, "Final file size mismatch");
+}
+
+#[tokio::test]
+async fn test_dynamic_split_when_one_worker_finishes_early() {
+    let server = TestHttpServer::start().await;
+    let url = format!("{}/large_3mb.bin", server.addr);
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads");
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    // Request 2 connections on 3MB payload
+    let download = core.add_download(&url, save_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 30).await;
+    assert!(completed, "Dynamic split download failed to complete");
+
+    let final_path = save_dir.join(core.get_download(download.id).await.unwrap().filename);
+    assert!(final_path.exists(), "Final file does not exist");
+    let content = std::fs::read(&final_path).unwrap();
+    assert_eq!(content.len(), server.payload_large.len());
+    assert_eq!(content, server.payload_large);
+}
+
+#[tokio::test]
+async fn test_segment_zero_based_indexing_integrity() {
+    let server = TestHttpServer::start().await;
+    let url = format!("{}/large_3mb.bin", server.addr);
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads");
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+    let download = core.add_download(&url, save_dir.clone(), Uuid::nil(), None, None, true).await.unwrap();
+    let completed = wait_for_status(&core, download.id, DownloadStatus::Completed, 30).await;
+    assert!(completed, "Download failed to complete");
+
+    let d = core.get_download(download.id).await.unwrap();
+    assert!(!d.segments.is_empty(), "Segments list should not be empty");
+    assert_eq!(d.segments[0].index, 0);
+    assert_eq!(d.segments[0].start, 0);
+    for i in 1..d.segments.len() {
+        assert_eq!(d.segments[i].start, d.segments[i - 1].end + 1);
+    }
+}
+
+

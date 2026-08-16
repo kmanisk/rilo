@@ -20,9 +20,7 @@ export function recordToDownloadItem(record: DownloadRecord): DownloadItem {
 export function progressToDownloadItem(payload: DownloadProgressPayload, previous?: DownloadItem): DownloadItem {
   const status = normalizeDownloadStatus(payload.status);
   const rawSpeed = payload.speed_bps || 0;
-  const previousSpeed = previous?.speedBps || 0;
-  const speedBps = status === "paused" || status === "completed" || rawSpeed === 0
-    ? 0 : previousSpeed === 0 ? rawSpeed : Math.round(previousSpeed * 0.7 + rawSpeed * 0.3);
+  const speedBps = status === "paused" || status === "completed" ? 0 : rawSpeed;
   const etaSeconds = speedBps > 0 && payload.total_bytes > payload.bytes_downloaded
     ? Math.round((payload.total_bytes - payload.bytes_downloaded) / speedBps) : payload.eta_seconds;
   let segments = Array.isArray(payload.segments) && payload.segments.length > 0 ? payload.segments : previous?.segments;

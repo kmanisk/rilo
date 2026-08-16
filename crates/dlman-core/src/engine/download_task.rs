@@ -3,7 +3,7 @@
 //! This is the main orchestrator for a single download.
 //! It spawns segment workers, monitors their progress, and merges temp files on completion.
 
-use crate::engine::{resolve_authoritative_filename, DownloadDatabase, RateLimiter, SegmentWorker};
+use crate::engine::{DownloadDatabase, RateLimiter, SegmentWorker};
 use crate::error::DlmanError;
 use dlman_types::{CoreEvent, Download, DownloadStatus, Segment, TempStorageSettings};
 use reqwest::Client;
@@ -124,7 +124,7 @@ pub struct DownloadTask {
     /// Maximum number of retries for failed segments
     max_retries: u32,
     /// Delay between retries in seconds
-    _retry_delay_secs: u32,
+    retry_delay_secs: u32,
     /// Optional credentials for authenticated downloads
     credentials: Option<(String, String)>,
 }
@@ -192,7 +192,7 @@ impl DownloadTask {
             total_downloaded,
             segment_count,
             max_retries,
-            _retry_delay_secs: retry_delay_secs,
+            retry_delay_secs,
             credentials,
         }
     }
@@ -237,13 +237,10 @@ impl DownloadTask {
         self.db.update_download_status(self.download.id, DownloadStatus::Downloading, None).await?;
         self.emit_status_change(DownloadStatus::Downloading, None).await;
 
-        eprintln!("[TASK-RUN] id={} status={:?} segments={}", self.download.id, self.download.status, self.download.segments.len());
-
         // Ensure the scratch directory exists before any segment worker writes
         // to it. Its location is chosen by the user's temp-storage policy (see
         // resolve_segment_cache_dir) and threaded in as self.temp_dir.
         if let Err(e) = tokio::fs::create_dir_all(&self.temp_dir).await {
-            eprintln!("[ERROR] id={} create_dir_all failed: {}", self.download.id, e);
             error!("Failed to create scratch directory {:?}: {}", self.temp_dir, e);
             return Err(DlmanError::Io(e));
         }
@@ -260,36 +257,8 @@ impl DownloadTask {
         
         // If no segments, probe URL and initialize them
         if self.download.segments.is_empty() {
-            eprintln!("[PROBE-START] id={} url={}", self.download.id, self.download.url);
             info!("No segments found, initializing...");
-            
-            let mut probe_attempts = 0u32;
-            let max_probe_attempts = self.max_retries.max(1);
-            let supports_range = loop {
-                probe_attempts += 1;
-                match self.probe_url().await {
-                    Ok(r) => {
-                        eprintln!("[PROBE-RESULT] id={} supports_range={} size={:?}", self.download.id, r, self.download.size);
-                        break r;
-                    }
-                    Err(e) => {
-                        eprintln!("[ERROR] id={} probe_url attempt {}/{} failed: {}", self.download.id, probe_attempts, max_probe_attempts, e);
-                        if probe_attempts <= max_probe_attempts && e.is_retryable() {
-                            let delay_secs = 1u32;
-                            info!("Probe failed with retryable error ({}), retrying in {}s...", e, delay_secs);
-                            tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs as u64)).await;
-                            continue;
-                        }
-
-                        let err_msg = e.to_string();
-                        self.download.status = DownloadStatus::Failed;
-                        self.download.error = Some(err_msg.clone());
-                        let _ = self.db.update_download_status(self.download.id, DownloadStatus::Failed, Some(err_msg.clone())).await;
-                        self.emit_status_change(DownloadStatus::Failed, Some(err_msg)).await;
-                        return Err(e);
-                    }
-                }
-            };
+            let supports_range = self.probe_url().await;
             
             // Check for pause/cancel after probe (which might have taken time)
             if self.cancelled.load(Ordering::Acquire) {
@@ -309,8 +278,8 @@ impl DownloadTask {
                 // Multi-segment download
                 let num_segments = self.segment_count as usize;
                 self.download.segments = self.calculate_segments(num_segments);
-                eprintln!("[SEGMENT-PLAN] id={} count={}", self.download.id, num_segments);
-                info!("Initialized {} segments", num_segments);
+                info!("[SEGMENT-PLAN] Initialized {} segments for multi-segment download (size: {:?})", 
+                      num_segments, self.download.size);
             } else {
                 // Single segment download (no range support, small file, or segment_count=1)
                 let size = self.download.size.unwrap_or(u64::MAX);
@@ -321,8 +290,8 @@ impl DownloadTask {
                     downloaded: 0,
                     complete: false,
                 }];
-                eprintln!("[SEGMENT-PLAN] id={} count=1 (single_stream)", self.download.id);
-                info!("Initialized single segment (no range support or small file)");
+                info!("[SEGMENT-PLAN] Initialized single segment (size: {:?}, supports_range: {})", 
+                      self.download.size, supports_range);
             }
             
             // Save segments to DB
@@ -342,10 +311,8 @@ impl DownloadTask {
         } else {
             // Spawn segment workers for incomplete segments
             let result = if self.download.segments.len() == 1 {
-                eprintln!("[DOWNLOAD-MODE] id={} mode=single_stream", self.download.id);
                 self.download_single_segment().await
             } else {
-                eprintln!("[DOWNLOAD-MODE] id={} mode=segmented count={}", self.download.id, self.download.segments.len());
                 self.download_multi_segment().await
             };
             
@@ -384,19 +351,6 @@ impl DownloadTask {
             }
         }
         
-        // Verify all segments are actually complete before merging
-        let all_complete_after = self.download.segments.iter().all(|s| s.complete);
-        if !all_complete_after {
-            let incomplete_count = self.download.segments.iter().filter(|s| !s.complete).count();
-            error!("Cannot complete download {}: {} segment(s) remain incomplete", self.download.id, incomplete_count);
-            let err_msg = format!("Download incomplete: {} segment(s) failed", incomplete_count);
-            self.download.status = DownloadStatus::Failed;
-            self.download.error = Some(err_msg.clone());
-            self.db.update_download_status(self.download.id, DownloadStatus::Failed, Some(err_msg.clone())).await?;
-            self.emit_status_change(DownloadStatus::Failed, Some(err_msg)).await;
-            return Err(DlmanError::Unknown("Incomplete download".to_string()));
-        }
-
         // All segments complete - merge into final file
         info!("All segments complete, merging...");
         let segment_sizes = self.merge_segments().await?;
@@ -468,22 +422,20 @@ impl DownloadTask {
             self.download.cookies.clone(),
         );
         
-        // Start progress reporter
-        let progress_handle = self.spawn_progress_reporter();
+        // Start progress reporter with dedicated cancellation token
+        let reporter_cancelled = Arc::new(AtomicBool::new(false));
+        let progress_handle = self.spawn_progress_reporter(reporter_cancelled.clone());
         
         // Run segment worker
         let result = worker.run().await;
         
-        // Stop progress reporter
-        self.cancelled.store(true, Ordering::Release);
+        // Stop progress reporter without corrupting self.cancelled
+        reporter_cancelled.store(true, Ordering::Release);
         let _ = progress_handle.await;
         
         // Handle result - update size if discovered
         match result {
             Ok(segment_result) => {
-                if !self.download.segments.is_empty() {
-                    self.download.segments[0].complete = true;
-                }
                 if let Some(size) = segment_result.discovered_size {
                     self.download.size = Some(size);
                     // Also update the segment end value so it's no longer u64::MAX
@@ -491,11 +443,37 @@ impl DownloadTask {
                         self.download.segments[0].end = size.saturating_sub(1);
                         self.download.segments[0].downloaded = size;
                     }
+                    if let Some(cd_header) = &segment_result.discovered_filename {
+                        let res = crate::engine::filename::resolve_authoritative_filename(
+                            self.download.id,
+                            Some(cd_header.as_str()),
+                            self.download.final_url.as_deref(),
+                            &self.download.url,
+                        );
+                        if res.resolved_filename != self.download.filename {
+                            self.download.filename = res.resolved_filename;
+                        }
+                    }
                     self.db.upsert_download(&self.download).await?;
                     let _ = self.event_tx.send(CoreEvent::DownloadUpdated {
                         download: self.download.clone(),
                     });
                     info!("Updated download size to {} bytes (discovered during download)", size);
+                }
+                if let Some(cd_header) = &segment_result.discovered_filename {
+                    let res = crate::engine::filename::resolve_authoritative_filename(
+                        self.download.id,
+                        Some(cd_header.as_str()),
+                        self.download.final_url.as_deref(),
+                        &self.download.url,
+                    );
+                    if res.resolved_filename != self.download.filename {
+                        self.download.filename = res.resolved_filename;
+                        let _ = self.db.upsert_download(&self.download).await;
+                        let _ = self.event_tx.send(CoreEvent::DownloadUpdated {
+                            download: self.download.clone(),
+                        });
+                    }
                 }
                 Ok(())
             }
@@ -507,8 +485,9 @@ impl DownloadTask {
     async fn download_multi_segment(&mut self) -> Result<(), DlmanError> {
         let mut retry_counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         
-        // Start progress reporter
-        let progress_handle = self.spawn_progress_reporter();
+        // Start progress reporter with dedicated cancellation token
+        let reporter_cancelled = Arc::new(AtomicBool::new(false));
+        let progress_handle = self.spawn_progress_reporter(reporter_cancelled.clone());
         
         // Segments that need to be downloaded (initially, all incomplete ones)
         let mut segments_to_download: Vec<Segment> = self.download.segments
@@ -519,7 +498,7 @@ impl DownloadTask {
         
         if segments_to_download.is_empty() {
             // All segments already complete
-            self.cancelled.store(true, Ordering::Release);
+            reporter_cancelled.store(true, Ordering::Release);
             let _ = progress_handle.await;
             return Ok(());
         }
@@ -531,18 +510,13 @@ impl DownloadTask {
             }
             
             let mut join_set = JoinSet::new();
+            
+            // Use final_url if available (after redirects), otherwise use original url
+            // This avoids re-resolving redirects for every segment request
             let url = self.effective_url().to_string();
             
             // Spawn a worker for each segment that needs downloading
             for segment in &segments_to_download {
-                eprintln!(
-                    "[SEGMENT-CREATE] download={} segment={} start={} end={}",
-                    self.download.id, segment.index, segment.start, segment.end
-                );
-                eprintln!(
-                    "[WORKER-SPAWN] download={} segment={}",
-                    self.download.id, segment.index
-                );
                 let worker = SegmentWorker::new_with_credentials(
                     self.download.id,
                     segment.clone(),
@@ -566,6 +540,7 @@ impl DownloadTask {
                 });
             }
             
+            // Track failed segments for retry
             let mut failed_segments: Vec<Segment> = Vec::new();
             let mut was_paused = false;
             let mut was_cancelled = false;
@@ -578,45 +553,54 @@ impl DownloadTask {
                         if let Some(seg) = self.download.segments.iter_mut().find(|s| s.index == segment_idx) {
                             seg.complete = true;
                         }
+                        if let Some(cd_header) = &segment_result.discovered_filename {
+                            let res = crate::engine::filename::resolve_authoritative_filename(
+                                self.download.id,
+                                Some(cd_header.as_str()),
+                                self.download.final_url.as_deref(),
+                                &self.download.url,
+                            );
+                            if res.resolved_filename != self.download.filename {
+                                self.download.filename = res.resolved_filename;
+                                let _ = self.db.upsert_download(&self.download).await;
+                                let _ = self.event_tx.send(CoreEvent::DownloadUpdated {
+                                    download: self.download.clone(),
+                                });
+                            }
+                        }
                         if segment_result.discovered_size.is_some() {
                             info!("Segment {} discovered size (unusual for multi-segment)", segment_idx);
                         }
                     }
                     Ok((segment_idx, Err(DlmanError::Paused))) => {
                         info!("Segment {} paused", segment_idx);
-                        self.paused.store(true, Ordering::Release);
                         was_paused = true;
                     }
                     Ok((segment_idx, Err(DlmanError::Cancelled))) => {
                         info!("Segment {} cancelled", segment_idx);
-                        self.cancelled.store(true, Ordering::Release);
                         was_cancelled = true;
                     }
                     Ok((segment_idx, Err(e))) => {
                         let retry_count = retry_counts.entry(segment_idx).or_insert(0);
                         *retry_count += 1;
                         
-                        let max_allowed = if e.is_retryable() { self.max_retries.max(20) } else { self.max_retries };
-                        
-                        if *retry_count <= max_allowed {
-                            let delay_secs = (self._retry_delay_secs as u64).min(3).max(1);
+                        if *retry_count <= self.max_retries {
+                            warn!("Segment {} failed (attempt {}/{}): {}. Will retry.", 
+                                  segment_idx, retry_count, self.max_retries, e);
+                            // Find the segment to retry
                             if let Some(seg) = self.download.segments.iter().find(|s| s.index == segment_idx) {
-                                eprintln!(
-                                    "[SEGMENT-RETRY] id={} segment={} attempt={}/{} retry_from={} retry_to={} delay_ms={}",
-                                    self.download.id, segment_idx, retry_count, max_allowed, seg.start + seg.downloaded, seg.end, delay_secs * 1000
-                                );
                                 failed_segments.push(seg.clone());
                             }
                         } else {
-                            error!("Segment {} failed after {} attempts: {}", segment_idx, max_allowed, e);
-                            self.cancelled.store(true, Ordering::Release);
+                            error!("Segment {} failed after {} attempts: {}", segment_idx, self.max_retries, e);
+                            reporter_cancelled.store(true, Ordering::Release);
                             let _ = progress_handle.await;
                             return Err(e);
                         }
                     }
                     Err(e) => {
                         error!("Segment task panicked: {}", e);
-                        self.cancelled.store(true, Ordering::Release);
+                        reporter_cancelled.store(true, Ordering::Release);
                         let _ = progress_handle.await;
                         return Err(DlmanError::Unknown(format!("Segment task panicked: {}", e)));
                     }
@@ -625,30 +609,32 @@ impl DownloadTask {
             
             // Check for pause/cancel
             if was_paused {
-                self.cancelled.store(true, Ordering::Release);
+                reporter_cancelled.store(true, Ordering::Release);
                 let _ = progress_handle.await;
                 return Err(DlmanError::Paused);
             }
             
             if was_cancelled {
-                self.cancelled.store(true, Ordering::Release);
+                reporter_cancelled.store(true, Ordering::Release);
                 let _ = progress_handle.await;
                 return Err(DlmanError::Cancelled);
             }
             
             // Prepare for retry if there are failed segments
             if !failed_segments.is_empty() {
-                let delay_secs = (self._retry_delay_secs as u64).min(3).max(1);
+                let delay = (self.retry_delay_secs as u64).min(2);
                 info!("Retrying {} failed segments after {} seconds delay...", 
-                      failed_segments.len(), delay_secs);
-                tokio::time::sleep(tokio::time::Duration::from_secs(delay_secs)).await;
+                      failed_segments.len(), delay);
+                tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
                 
                 // Check if cancelled during delay
                 if self.cancelled.load(Ordering::Acquire) {
+                    reporter_cancelled.store(true, Ordering::Release);
                     let _ = progress_handle.await;
                     return Err(DlmanError::Cancelled);
                 }
                 if self.paused.load(Ordering::Acquire) {
+                    reporter_cancelled.store(true, Ordering::Release);
                     let _ = progress_handle.await;
                     return Err(DlmanError::Paused);
                 }
@@ -661,33 +647,29 @@ impl DownloadTask {
         }
         
         // Stop progress reporter
-        self.cancelled.store(true, Ordering::Release);
+        reporter_cancelled.store(true, Ordering::Release);
         let _ = progress_handle.await;
         
         Ok(())
     }
     
     /// Spawn a background task to report progress periodically
-    fn spawn_progress_reporter(&self) -> tokio::task::JoinHandle<()> {
+    fn spawn_progress_reporter(&self, reporter_cancelled: Arc<AtomicBool>) -> tokio::task::JoinHandle<()> {
         let download_id = self.download.id;
         let total_size = self.download.size;
         let total_downloaded = self.total_downloaded.clone();
-        let cancelled = self.cancelled.clone();
         let paused = self.paused.clone();
         let event_tx = self.event_tx.clone();
         let db = self.db.clone();
         
         tokio::spawn(async move {
-            // Rolling speed calculation with exponential moving average
-            // Use a sliding window for more stable measurements
-            let mut speed_samples: Vec<f64> = Vec::with_capacity(10);
             let mut last_downloaded = total_downloaded.load(Ordering::Acquire);
             let mut last_time = std::time::Instant::now();
             let mut smoothed_speed: f64 = 0.0;
             let alpha = 0.15; // Lower alpha = smoother speed display (was 0.3)
             let mut last_db_save = std::time::Instant::now();
             
-            while !cancelled.load(Ordering::Acquire) {
+            while !reporter_cancelled.load(Ordering::Acquire) {
                 // Update every 500ms for smooth UI without flooding
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                 
@@ -695,7 +677,6 @@ impl DownloadTask {
                 if paused.load(Ordering::Acquire) {
                     last_time = std::time::Instant::now();
                     last_downloaded = total_downloaded.load(Ordering::Acquire);
-                    speed_samples.clear();
                     smoothed_speed = 0.0;
                     continue;
                 }
@@ -711,27 +692,19 @@ impl DownloadTask {
                     0.0
                 };
                 
-                // Store sample in sliding window (last 10 samples = 5 seconds)
-                speed_samples.push(instant_speed);
-                if speed_samples.len() > 10 {
-                    speed_samples.remove(0);
-                }
-                
-                // Use windowed average combined with EMA for stability
-                let window_avg = if !speed_samples.is_empty() {
-                    speed_samples.iter().sum::<f64>() / speed_samples.len() as f64
-                } else {
+                // Exponential moving average for smooth display
+                smoothed_speed = if smoothed_speed == 0.0 {
                     instant_speed
+                } else {
+                    alpha * instant_speed + (1.0 - alpha) * smoothed_speed
                 };
                 
-                // Apply exponential moving average to windowed average for smooth speed
-                smoothed_speed = alpha * window_avg + (1.0 - alpha) * smoothed_speed;
                 let speed = smoothed_speed as u64;
-                
-                // Calculate ETA
-                let eta = if speed > 0 && total_size.is_some() {
-                    let remaining = total_size.unwrap().saturating_sub(downloaded);
-                    Some(remaining / speed)
+                let eta = if speed > 0 {
+                    total_size.map(|total| {
+                        let remaining = total.saturating_sub(downloaded);
+                        remaining / speed
+                    })
                 } else {
                     None
                 };
@@ -744,14 +717,6 @@ impl DownloadTask {
                     speed,
                     eta,
                 });
-
-                let pct = if let Some(tot) = total_size {
-                    if tot > 0 { (downloaded as f64 / tot as f64) * 100.0 } else { 0.0 }
-                } else { 0.0 };
-                eprintln!(
-                    "[DOWNLOAD-PERF] id={} pct={:.1}% downloaded={} total={:?} speed_bps={}",
-                    download_id, pct, downloaded, total_size, speed
-                );
                 
                 // Save to DB every 5 seconds
                 if last_db_save.elapsed().as_secs() >= 5 {
@@ -765,13 +730,19 @@ impl DownloadTask {
         })
     }
     
-    /// Probe URL to determine if range requests are supported
-    /// Uses HEAD first, then falls back to partial GET for size/resumability detection
-    async fn probe_url(&mut self) -> Result<bool, DlmanError> {
-        let probe_start_time = std::time::Instant::now();
+    /// Probe URL to determine if range requests are supported and discover file metadata.
+    /// Advisory only: errors during probing NEVER abort the download task.
+    async fn probe_url(&mut self) -> bool {
+        let start_time = std::time::Instant::now();
+        info!("[PROBE-START] URL={}", self.download.url);
+        
+        let probe_timeout = std::time::Duration::from_secs(7);
         let mut supports_range = false;
-        let mut head_succeeded = false;
-
+        
+        // 1. Try HEAD request with bounded timeout
+        let head_start = std::time::Instant::now();
+        info!("[PROBE-HEAD-START] method=HEAD URL={}", self.download.url);
+        
         let mut head_req = self.client.head(&self.download.url);
         if let Some((ref username, ref password)) = self.credentials {
             head_req = head_req.basic_auth(username, Some(password));
@@ -779,46 +750,44 @@ impl DownloadTask {
         if let Some(ref cookies) = self.download.cookies {
             head_req = head_req.header(reqwest::header::COOKIE, cookies);
         }
-
-        eprintln!("[HTTP-REQUEST] id={} method=HEAD url={}", self.download.id, self.download.url);
-        match head_req.send().await {
-            Ok(response) => {
+        
+        let head_result = tokio::time::timeout(probe_timeout, head_req.send()).await;
+        
+        match head_result {
+            Ok(Ok(response)) => {
+                let elapsed_ms = head_start.elapsed().as_millis();
                 let status = response.status();
-                let elapsed_ms = probe_start_time.elapsed().as_millis();
-                eprintln!(
-                    "[HTTP-RESPONSE] id={} method=HEAD status={} elapsed_ms={}",
-                    self.download.id, status, elapsed_ms
-                );
-
-                if status.as_u16() == 401 || status.as_u16() == 403 {
-                    let domain = url::Url::parse(&self.download.url)
-                        .ok()
-                        .and_then(|u| u.host_str().map(|h| h.to_string()))
-                        .unwrap_or_else(|| "unknown".to_string());
-
-                    return Err(DlmanError::AuthenticationRequired {
-                        domain,
-                        url: self.download.url.clone(),
-                        status: status.as_u16(),
-                    });
+                let final_url = response.url().to_string();
+                if final_url != self.download.url {
+                    self.download.final_url = Some(final_url);
                 }
-
-                if status.as_u16() == 429 {
-                    return Err(DlmanError::ServerError {
-                        status: 429,
-                        message: "Server returned HTTP 429".to_string(),
-                    });
+                
+                info!("[PROBE-HEAD-RESULT] status={} elapsed_ms={} final_url={:?}", 
+                      status, elapsed_ms, self.download.final_url);
+                
+                if let Some(cd) = response.headers().get(reqwest::header::CONTENT_DISPOSITION) {
+                    if let Ok(cd_str) = cd.to_str() {
+                        let res = crate::engine::filename::resolve_authoritative_filename(
+                            self.download.id,
+                            Some(cd_str),
+                            self.download.final_url.as_deref(),
+                            &self.download.url,
+                        );
+                        if res.resolved_filename != self.download.filename {
+                            self.download.filename = res.resolved_filename;
+                        }
+                    }
                 }
-
-                if status.is_success() || status.as_u16() == 206 {
-                    head_succeeded = true;
-                    supports_range = response
-                        .headers()
-                        .get(reqwest::header::ACCEPT_RANGES)
-                        .and_then(|v| v.to_str().ok())
-                        .map(|s| s == "bytes")
-                        .unwrap_or(false);
-
+                
+                if status.is_success() {
+                    if let Some(accept_ranges) = response.headers().get(reqwest::header::ACCEPT_RANGES) {
+                        if let Ok(s) = accept_ranges.to_str() {
+                            if s.eq_ignore_ascii_case("bytes") {
+                                supports_range = true;
+                            }
+                        }
+                    }
+                    
                     if self.download.size.is_none() {
                         self.download.size = response
                             .headers()
@@ -826,156 +795,110 @@ impl DownloadTask {
                             .and_then(|v| v.to_str().ok())
                             .and_then(|s| s.parse().ok());
                     }
-
-                    let final_url = response.url().to_string();
-                    if final_url != self.download.url {
-                        self.download.final_url = Some(final_url);
-                    }
-
-                    let cd_header = response
-                        .headers()
-                        .get(reqwest::header::CONTENT_DISPOSITION)
-                        .and_then(|v| v.to_str().ok());
-
-                    let res = resolve_authoritative_filename(
-                        self.download.id,
-                        cd_header,
-                        self.download.final_url.as_deref(),
-                        &self.download.url,
-                    );
-
-                    if res.resolved_filename != self.download.filename {
-                        self.download.filename = res.resolved_filename;
-                        let _ = self.db.upsert_download(&self.download).await;
-                        let _ = self.event_tx.send(CoreEvent::DownloadUpdated {
-                            download: self.download.clone(),
-                        });
-                    }
                 } else {
-                    eprintln!(
-                        "[PROBE-FALLBACK] id={} reason=\"HEAD returned HTTP {}\", trying partial GET",
-                        self.download.id, status
-                    );
+                    info!("[PROBE-HEAD-RESULT] HEAD returned non-success status {} -> will try Range GET fallback", status);
                 }
             }
-            Err(e) => {
-                let elapsed_ms = probe_start_time.elapsed().as_millis();
-                let dl_err = DlmanError::from(e);
-                let detailed = crate::error::format_detailed_error(&dl_err);
-                eprintln!(
-                    "[PROBE-FALLBACK] id={} reason=\"HEAD error: {}\" elapsed_ms={} detailed=\"{}\"",
-                    self.download.id, dl_err, elapsed_ms, detailed
-                );
+            Ok(Err(e)) => {
+                let elapsed_ms = head_start.elapsed().as_millis();
+                warn!("[PROBE-HEAD-ERROR] error={} elapsed_ms={} fallback=true", e, elapsed_ms);
+            }
+            Err(_) => {
+                let elapsed_ms = head_start.elapsed().as_millis();
+                warn!("[PROBE-HEAD-ERROR] error=Timeout ({}s) elapsed_ms={} fallback=true", 
+                      probe_timeout.as_secs(), elapsed_ms);
             }
         }
-
-        // If HEAD didn't give us size or failed, try partial GET (Range: bytes=0-0)
-        if !head_succeeded || self.download.size.is_none() {
-            let probe_url = self
-                .download
-                .final_url
-                .as_ref()
-                .unwrap_or(&self.download.url)
-                .to_string();
-
-            let mut range_req = self
-                .client
-                .get(&probe_url)
+        
+        // 2. If HEAD didn't give us size or range info, try bounded Range GET (bytes=0-0)
+        if self.download.size.is_none() || !supports_range {
+            let target_url = self.effective_url().to_string();
+            let range_start = std::time::Instant::now();
+            info!("[PROBE-RANGE-START] method=GET range=bytes=0-0 URL={}", target_url);
+            
+            let mut range_req = self.client
+                .get(&target_url)
                 .header(reqwest::header::RANGE, "bytes=0-0");
-
+            
             if let Some((ref username, ref password)) = self.credentials {
                 range_req = range_req.basic_auth(username, Some(password));
             }
             if let Some(ref cookies) = self.download.cookies {
                 range_req = range_req.header(reqwest::header::COOKIE, cookies);
             }
-
-            eprintln!("[HTTP-REQUEST] id={} method=GET range=bytes=0-0 url={}", self.download.id, probe_url);
-            match range_req.send().await {
-                Ok(range_response) => {
+            
+            let range_result = tokio::time::timeout(probe_timeout, range_req.send()).await;
+            match range_result {
+                Ok(Ok(range_response)) => {
+                    let elapsed_ms = range_start.elapsed().as_millis();
                     let status = range_response.status();
-                    let elapsed_ms = probe_start_time.elapsed().as_millis();
-                    eprintln!(
-                        "[HTTP-RESPONSE] id={} method=GET range=bytes=0-0 status={} elapsed_ms={}",
-                        self.download.id, status, elapsed_ms
-                    );
-
                     let final_url = range_response.url().to_string();
-                    if final_url != self.download.url {
+                    if final_url != self.download.url && self.download.final_url.is_none() {
                         self.download.final_url = Some(final_url);
                     }
-
-                    let cd_header = range_response
-                        .headers()
-                        .get(reqwest::header::CONTENT_DISPOSITION)
-                        .and_then(|v| v.to_str().ok());
-
-                    let res = resolve_authoritative_filename(
-                        self.download.id,
-                        cd_header,
-                        self.download.final_url.as_deref(),
-                        &self.download.url,
-                    );
-
-                    if res.resolved_filename != self.download.filename {
-                        self.download.filename = res.resolved_filename;
-                        let _ = self.db.upsert_download(&self.download).await;
-                        let _ = self.event_tx.send(CoreEvent::DownloadUpdated {
-                            download: self.download.clone(),
-                        });
+                    
+                    info!("[PROBE-RANGE-RESULT] status={} elapsed_ms={}", status, elapsed_ms);
+                    
+                    if let Some(cd) = range_response.headers().get(reqwest::header::CONTENT_DISPOSITION) {
+                        if let Ok(cd_str) = cd.to_str() {
+                            let res = crate::engine::filename::resolve_authoritative_filename(
+                                self.download.id,
+                                Some(cd_str),
+                                self.download.final_url.as_deref(),
+                                &self.download.url,
+                            );
+                            if res.resolved_filename != self.download.filename {
+                                self.download.filename = res.resolved_filename;
+                            }
+                        }
                     }
-
+                    
                     if status == reqwest::StatusCode::PARTIAL_CONTENT {
                         supports_range = true;
-                        if let Some(content_range) =
-                            range_response.headers().get(reqwest::header::CONTENT_RANGE)
-                        {
+                        if let Some(content_range) = range_response.headers().get(reqwest::header::CONTENT_RANGE) {
                             if let Ok(range_str) = content_range.to_str() {
+                                info!("[PROBE-RANGE-RESULT] Content-Range: {}", range_str);
                                 if let Some(total) = range_str.split('/').last() {
                                     if total != "*" {
                                         if let Ok(total_size) = total.parse::<u64>() {
                                             self.download.size = Some(total_size);
-                                            info!("Got size from Content-Range: {} bytes", total_size);
+                                            info!("[PROBE-RANGE-RESULT] Discovered total size from Content-Range: {} bytes", total_size);
                                         }
                                     }
                                 }
                             }
                         }
                     } else if status == reqwest::StatusCode::OK {
-                        if let Some(size) = range_response
-                            .headers()
+                        // Server ignored Range header, returns full body
+                        supports_range = false;
+                        if let Some(size) = range_response.headers()
                             .get(reqwest::header::CONTENT_LENGTH)
                             .and_then(|v| v.to_str().ok())
-                            .and_then(|s| s.parse().ok())
+                            .and_then(|s| s.parse::<u64>().ok())
                         {
                             self.download.size = Some(size);
-                            info!("Got size from full GET response: {} bytes", size);
+                            info!("[PROBE-RANGE-RESULT] Discovered size from 200 OK Content-Length: {} bytes", size);
                         }
-                        supports_range = false;
-                    } else if status.as_u16() == 429 || status.as_u16() == 503 || status.is_server_error() || status.as_u16() == 404 {
-                        return Err(DlmanError::ServerError {
-                            status: status.as_u16(),
-                            message: format!("Server returned HTTP {}", status.as_u16()),
-                        });
+                    } else {
+                        info!("[PROBE-FALLBACK] Range GET status={} -> continuing as single-stream GET", status);
                     }
                 }
-                Err(e) => {
-                    let elapsed_ms = probe_start_time.elapsed().as_millis();
-                    let dl_err = DlmanError::from(e);
-                    let detailed = crate::error::format_detailed_error(&dl_err);
-                    eprintln!(
-                        "[PROBE-ERROR] id={} url={} elapsed_ms={} detailed=\"{}\"",
-                        self.download.id, self.download.url, elapsed_ms, detailed
-                    );
-
-                    if !head_succeeded {
-                        return Err(dl_err);
-                    }
+                Ok(Err(e)) => {
+                    let elapsed_ms = range_start.elapsed().as_millis();
+                    warn!("[PROBE-FALLBACK] Range GET failed: {} (elapsed_ms={}) -> continuing as single-stream GET", e, elapsed_ms);
+                }
+                Err(_) => {
+                    let elapsed_ms = range_start.elapsed().as_millis();
+                    warn!("[PROBE-FALLBACK] Range GET timed out after {}s (elapsed_ms={}) -> continuing as single-stream GET", probe_timeout.as_secs(), elapsed_ms);
                 }
             }
         }
-
-        Ok(supports_range)
+        
+        let total_elapsed_ms = start_time.elapsed().as_millis();
+        info!("[PROBE-COMPLETE] supports_range={} size={:?} elapsed_ms={}", 
+              supports_range, self.download.size, total_elapsed_ms);
+        
+        supports_range
     }
     
     /// Calculate segments for multi-segment download

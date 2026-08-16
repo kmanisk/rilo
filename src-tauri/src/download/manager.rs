@@ -314,6 +314,26 @@ impl DownloadManager {
                     CoreEvent::DownloadRemoved { id } => {
                         meta_cache.remove(&id);
                     }
+                    CoreEvent::SegmentProgress { download_id, segment_index, downloaded } => {
+                        if let Some(cached) = meta_cache.get_mut(&download_id) {
+                            // Segment IDs in SegmentProgressPayload are 1-based (segment_id = index + 1),
+                            // while segment_index here is 0-based. Match by segment_id = segment_index + 1.
+                            let target_id = (segment_index + 1) as usize;
+                            if let Some(seg) = cached.segments.iter_mut().find(|s| s.segment_id == target_id) {
+                                seg.downloaded_bytes = downloaded;
+                                let progress = if seg.total_bytes > 0 {
+                                    (downloaded as f64 / seg.total_bytes as f64) * 100.0
+                                } else {
+                                    0.0
+                                };
+                                seg.progress_percent = progress;
+                                // Mark as actively downloading (not pending) once bytes are flowing
+                                if seg.state != "completed" {
+                                    seg.state = "downloading".to_string();
+                                }
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -343,23 +363,39 @@ impl DownloadManager {
             }
         }
 
-        // Determine save directory
-        let save_dir = if let Some(ref path_str) = custom_path {
+        let cfg = self.app_config.lock().await.clone();
+
+        // Determine base save directory
+        let base_dir = if let Some(ref path_str) = custom_path {
             let p = PathBuf::from(path_str);
             if p.is_file() || p.extension().is_some() {
                 p.parent().map(|parent| parent.to_path_buf()).unwrap_or(p)
             } else {
                 p
             }
+        } else if !cfg.download.download_directory.trim().is_empty() {
+            PathBuf::from(&cfg.download.download_directory)
         } else {
             dirs::download_dir().unwrap_or_else(|| PathBuf::from("."))
         };
 
+        let use_category = cfg.download.use_category_by_default && custom_path.is_none();
+        let temp_download_id = uuid::Uuid::new_v4();
+        let init_resolved = dlman_core::resolve_authoritative_filename(temp_download_id, None, None, &url);
+        let final_save_dir = dlman_core::resolve_final_download_dir(&base_dir, use_category, &init_resolved.resolved_filename);
+
+        let _ = tokio::fs::create_dir_all(&final_save_dir).await;
+
+        let category_name = if use_category { dlman_core::get_category_folder_name(&init_resolved.resolved_filename) } else { "none" };
+        eprintln!(
+            "[DOWNLOAD-PATH] url={} filename=\"{}\" category=\"{}\" base_dir={:?} use_category={} final_dir={:?}",
+            url, init_resolved.resolved_filename, category_name, base_dir, use_category, final_save_dir
+        );
+
         let queue_id = Uuid::nil();
-        eprintln!("[ADD-DOWNLOAD] url={} save_dir={:?} num_connections={:?}", url, save_dir, num_connections);
         let download = self
             .core
-            .add_download(&url, save_dir, queue_id, None, None, false)
+            .add_download(&url, final_save_dir, queue_id, None, None, false)
             .await
             .map_err(|e| {
                 eprintln!("[ERROR] add_download failed: {}", e);

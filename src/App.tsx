@@ -424,7 +424,6 @@ export default function App() {
     try {
       await invoke("delete_download_file", {
         downloadId: item.id,
-        filePath: item.savePath,
       });
       setDownloads((prev) => {
         const next = { ...prev };

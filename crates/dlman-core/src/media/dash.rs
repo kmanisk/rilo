@@ -33,6 +33,7 @@ impl DashHandler {
             return Err(DlmanError::ServerError {
                 status: resp.status().as_u16(),
                 message: format!("Failed to fetch MPD: {url}"),
+                retry_after: None,
             });
         }
         Ok(resp.text().await?)

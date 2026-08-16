@@ -75,7 +75,7 @@ export default function DownloadDetailsDrawer({
 
   const handleCancelExtraction = async () => {
     try {
-      await invoke("cancel_extraction", { downloadId: item.id });
+      await invoke("cancel_extraction", { archivePath: item.savePath });
     } catch (err) {
       console.error("Cancel extraction error:", err);
     }

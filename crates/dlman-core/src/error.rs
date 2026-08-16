@@ -40,7 +40,11 @@ pub enum DlmanError {
     AlreadyExists(Uuid),
 
     #[error("Server error: {status} - {message}")]
-    ServerError { status: u16, message: String },
+    ServerError {
+        status: u16,
+        message: String,
+        retry_after: Option<u64>,
+    },
 
     #[error("Authentication required for {domain} (HTTP {status})")]
     AuthenticationRequired { domain: String, url: String, status: u16 },
@@ -58,10 +62,41 @@ impl DlmanError {
         match self {
             DlmanError::Network(_) | DlmanError::Timeout => true,
             DlmanError::ServerError { status, .. } => *status == 429 || *status == 503 || *status >= 500,
-            DlmanError::AuthenticationRequired { .. } => true, // Retryable after user provides credentials
+            DlmanError::AuthenticationRequired { .. } => false,
             _ => false,
         }
     }
+
+    /// Extract retry-after duration in seconds if provided by server
+    pub fn retry_after(&self) -> Option<u64> {
+        match self {
+            DlmanError::ServerError { retry_after, .. } => *retry_after,
+            _ => None,
+        }
+    }
+}
+
+/// Helper to parse Retry-After header from an HTTP response
+pub fn parse_retry_after(response: &reqwest::Response) -> Option<u64> {
+    if let Some(val) = response.headers().get(reqwest::header::RETRY_AFTER) {
+        if let Ok(s) = val.to_str() {
+            let s = s.trim();
+            if let Ok(secs) = s.parse::<u64>() {
+                return Some(secs.min(300));
+            }
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc2822(s) {
+                let dt_utc = dt.with_timezone(&chrono::Utc);
+                let now = chrono::Utc::now();
+                if dt_utc > now {
+                    let diff = (dt_utc - now).num_seconds();
+                    if diff > 0 {
+                        return Some((diff as u64).min(300));
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Format error details with complete source chain and classification for diagnostics

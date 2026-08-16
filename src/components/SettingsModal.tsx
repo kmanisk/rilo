@@ -106,29 +106,31 @@ function SettingRow({
   children: preact.ComponentChildren;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 min-h-[44px]">
-      <div className="space-y-0.5 pr-4 max-w-[65%]">
-        <div className="flex items-center space-x-1.5">
-          <span className="text-xs font-semibold text-rilo-primary">{label}</span>
+    <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3 min-h-[48px]">
+      <div className="space-y-1 min-w-0 pr-2">
+        <div className="flex items-center space-x-1.5 flex-wrap">
+          <span className="text-xs font-semibold text-rilo-primary tracking-tight">{label}</span>
           {tooltip && (
             <span
-              className="text-[10px] text-rilo-muted hover:text-rilo-primary cursor-help border border-rilo-subtle rounded-full w-3.5 h-3.5 inline-flex items-center justify-center font-mono"
+              className="text-[10px] text-rilo-muted hover:text-rilo-primary cursor-help border border-rilo-subtle rounded-full w-3.5 h-3.5 inline-flex items-center justify-center font-mono shrink-0"
               title={tooltip}
             >
               ?
             </span>
           )}
         </div>
-        {subtext && <p className="text-[11px] text-rilo-muted leading-tight">{subtext}</p>}
+        {subtext && <p className="text-[11px] text-rilo-muted leading-snug">{subtext}</p>}
       </div>
-      <div className="flex-shrink-0">{children}</div>
+      <div className="flex items-center justify-end justify-self-end shrink-0">
+        {children}
+      </div>
     </div>
   );
 }
 
 function SettingsGroup({ children }: { children: preact.ComponentChildren }) {
   return (
-    <div className="bg-rilo-elevated border border-rilo-subtle rounded-xl p-4 divide-y divide-rilo-subtle shadow-xs mb-4">
+    <div className="bg-rilo-elevated border border-rilo-subtle rounded-xl px-4 py-1 divide-y divide-rilo-subtle/70 shadow-xs mb-4">
       {children}
     </div>
   );
@@ -649,7 +651,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
             {/* TAB 2: DOWNLOAD ENGINE */}
             {activeTab === 'downloads' && (
-              <div>
+              <div className="space-y-4">
                 <SettingsGroup>
                   <SettingRow label="Default Download Folder" tooltip="Target directory for downloaded files">
                     <div className="flex items-center space-x-2">
@@ -664,44 +666,70 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             },
                           })
                         }
+                        placeholder="Select default download folder..."
                         className="w-72 font-mono text-xs"
                       />
-                      <Button variant="secondary" size="sm" onClick={handlePickFolder} className="space-x-1">
+                      <Button variant="secondary" size="sm" onClick={handlePickFolder} className="space-x-1 shrink-0">
                         <FolderOpen className="w-3.5 h-3.5" />
                         <span>Browse</span>
                       </Button>
                     </div>
                   </SettingRow>
 
-                  <SettingRow label="Use Category By Default" subtext={config.download.use_category_by_default ? 'Enabled' : 'Disabled'}>
-                    <SwitchToggle
-                      checked={!!config.download.use_category_by_default}
-                      onChange={(val) =>
-                        setConfig({
-                          ...config,
-                          download: { ...config.download, use_category_by_default: val },
-                        })
-                      }
-                    />
-                  </SettingRow>
+                  <div className="py-3">
+                    <SettingRow
+                      label="Use Category By Default"
+                      subtext={config.download.use_category_by_default ? 'Enabled' : 'Disabled'}
+                      tooltip="Automatically sort downloaded files into category subfolders based on extension"
+                    >
+                      <SwitchToggle
+                        checked={!!config.download.use_category_by_default}
+                        onChange={(val) =>
+                          setConfig({
+                            ...config,
+                            download: { ...config.download, use_category_by_default: val },
+                          })
+                        }
+                      />
+                    </SettingRow>
+                    <p className="text-[11px] text-rilo-muted mt-1 leading-normal">
+                      Automatically organize downloads into <span className="font-medium text-rilo-primary">Compressed</span>, <span className="font-medium text-rilo-primary">Programs</span>, <span className="font-medium text-rilo-primary">Videos</span>, <span className="font-medium text-rilo-primary">Music</span>, <span className="font-medium text-rilo-primary">Pictures</span>, <span className="font-medium text-rilo-primary">Documents</span>, and <span className="font-medium text-rilo-primary">Other</span> subfolders.
+                    </p>
+                    {config.download.use_category_by_default && (
+                      <div className="mt-2.5 p-3 bg-rilo-surface/80 border border-rilo-subtle rounded-lg text-[11px] font-mono text-rilo-muted leading-relaxed select-text">
+                        <div className="font-semibold text-rilo-accent text-xs mb-1">Download folder structure:</div>
+                        <div>{config.download.download_directory || 'Downloads'}/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Compressed/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Documents/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Music/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Pictures/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Programs/</div>
+                        <div className="pl-3 text-rilo-secondary">├── 📁 Videos/</div>
+                        <div className="pl-3 text-rilo-secondary">└── 📁 Other/</div>
+                      </div>
+                    )}
+                  </div>
                 </SettingsGroup>
 
                 <SettingsGroup>
                   <SettingRow label="Global Speed Limiter" tooltip="0 = Unlimited KB/s">
-                    <Input
-                      type="number"
-                      value={config.download.global_speed_limit_kbps}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          download: {
-                            ...config.download,
-                            global_speed_limit_kbps: parseInt((e.target as HTMLInputElement).value, 10) || 0,
-                          },
-                        })
-                      }
-                      className="w-28 font-mono text-xs"
-                    />
+                    <div className="flex items-center space-x-1.5 justify-end w-36">
+                      <Input
+                        type="number"
+                        value={config.download.global_speed_limit_kbps}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            download: {
+                              ...config.download,
+                              global_speed_limit_kbps: Math.max(0, parseInt((e.target as HTMLInputElement).value, 10) || 0),
+                            },
+                          })
+                        }
+                        className="w-24 font-mono text-xs text-right"
+                      />
+                      <span className="text-xs text-rilo-muted font-mono">KB/s</span>
+                    </div>
                   </SettingRow>
 
                   <SettingRow label="Thread Count" subtext={`A download can have up to ${config.download.max_connections_per_download} threads`}>
@@ -716,11 +744,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           },
                         })
                       }
-                      className="w-24 font-mono"
+                      className="w-36 font-mono"
                     >
                       {[1, 2, 4, 8, 16, 32].map((n) => (
                         <option key={n} value={n.toString()}>
-                          {n}
+                          {n} {n === 1 ? 'thread' : 'threads'}
                         </option>
                       ))}
                     </Select>
@@ -738,11 +766,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           },
                         })
                       }
-                      className="w-24 font-mono"
+                      className="w-36 font-mono"
                     >
                       {[1, 2, 3, 4, 6, 8, 12, 16].map((n) => (
                         <option key={n} value={n.toString()}>
-                          {n}
+                          {n} active
                         </option>
                       ))}
                     </Select>
@@ -760,11 +788,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           },
                         })
                       }
-                      className="w-24 font-mono"
+                      className="w-36 font-mono"
                     >
                       {[0, 1, 2, 3, 5, 10].map((n) => (
                         <option key={n} value={n.toString()}>
-                          {n}
+                          {n} {n === 1 ? 'retry' : 'retries'}
                         </option>
                       ))}
                     </Select>
@@ -782,7 +810,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           },
                         })
                       }
-                      className="w-28 font-mono"
+                      className="w-36 font-mono"
                     >
                       {[10, 15, 30, 60, 120, 300].map((s) => (
                         <option key={s} value={s.toString()}>

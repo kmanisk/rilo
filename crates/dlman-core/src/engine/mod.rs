@@ -8,6 +8,7 @@
 //! - Crash-safe resume
 
 mod filename;
+mod category;
 mod persistence;
 mod rate_limiter;
 mod segment_worker;
@@ -15,6 +16,7 @@ mod download_task;
 mod manager;
 
 pub use filename::*;
+pub use category::*;
 pub use persistence::*;
 pub use rate_limiter::*;
 pub use segment_worker::*;

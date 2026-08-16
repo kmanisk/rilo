@@ -24,6 +24,8 @@ pub struct SegmentResult {
     pub path: PathBuf,
     /// Total size discovered during download (if previously unknown)
     pub discovered_size: Option<u64>,
+    /// Content-Disposition header discovered during download
+    pub discovered_filename: Option<String>,
 }
 
 /// A segment worker that downloads a byte range to a temporary file
@@ -122,19 +124,14 @@ impl SegmentWorker {
     
     /// Run the segment download
     pub async fn run(mut self) -> Result<SegmentResult, DlmanError> {
-        let start_time = tokio::time::Instant::now();
         info!(
             "Starting segment {} for download {} (bytes {}-{})",
             self.segment.index, self.download_id, self.segment.start, self.segment.end
         );
         
-        // Ensure parent directory exists for temp file
-        if let Some(parent) = self.temp_file_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        // Track if we discover the total size during download
+        // Track if we discover the total size or filename during download
         let mut discovered_size: Option<u64> = None;
+        let mut discovered_filename: Option<String> = None;
         
         // Check if segment is already complete
         if self.segment.complete {
@@ -142,6 +139,7 @@ impl SegmentWorker {
             return Ok(SegmentResult {
                 path: self.temp_file_path,
                 discovered_size: None,
+                discovered_filename: None,
             });
         }
         
@@ -157,8 +155,16 @@ impl SegmentWorker {
         // For unknown size segments, we always resume from whatever we have
         let existing_size = file.metadata().await?.len();
         if existing_size > 0 {
-            // For unknown size, always resume; for known size, only if within bounds
-            if self.segment.is_unknown_size() || existing_size <= self.segment.size() {
+            // If existing file is larger than the segment bounds, it's corrupt - truncate to 0
+            if !self.segment.is_unknown_size() && existing_size > self.segment.size() {
+                tracing::warn!(
+                    "Segment {} temp file is corrupt/oversized ({} > {}). Truncating to 0.",
+                    self.segment.index, existing_size, self.segment.size()
+                );
+                let _ = file.set_len(0).await;
+                let _ = file.seek(std::io::SeekFrom::Start(0)).await;
+                self.segment.downloaded = 0;
+            } else if self.segment.is_unknown_size() || existing_size <= self.segment.size() {
                 self.segment.downloaded = existing_size;
                 file.seek(std::io::SeekFrom::Start(existing_size)).await?;
                 info!(
@@ -188,6 +194,7 @@ impl SegmentWorker {
             return Ok(SegmentResult {
                 path: self.temp_file_path,
                 discovered_size: None,
+                discovered_filename: None,
             });
         }
         
@@ -221,31 +228,8 @@ impl SegmentWorker {
             request = request.header(reqwest::header::COOKIE, cookies);
         }
         
-        let get_start_time = std::time::Instant::now();
-        eprintln!(
-            "[SEGMENT-START] id={} segment={} range={}-{}",
-            self.download_id, self.segment.index, start_byte, end_byte
-        );
-        let response = match request.send().await {
-            Ok(r) => {
-                let elapsed_ms = get_start_time.elapsed().as_millis();
-                eprintln!(
-                    "[SEGMENT-RESPONSE] id={} segment={} status={} elapsed_ms={}",
-                    self.download_id, self.segment.index, r.status(), elapsed_ms
-                );
-                r
-            }
-            Err(e) => {
-                let err = DlmanError::from(e);
-                eprintln!(
-                    "[SEGMENT-ERROR] id={} segment={} error_kind=\"{:?}\" retryable={} source_chain=\"{}\"",
-                    self.download_id, self.segment.index, err, err.is_retryable(), crate::error::format_detailed_error(&err)
-                );
-                return Err(err);
-            }
-        };
-        
-        // Check response status
+        let response = request.send().await?;
+
         let status = response.status();
         if status.as_u16() == 401 || status.as_u16() == 403 {
             // Authentication required - extract domain for credential lookup
@@ -264,6 +248,7 @@ impl SegmentWorker {
             return Err(DlmanError::ServerError {
                 status: status.as_u16(),
                 message: format!("Failed to download segment {}", self.segment.index),
+                retry_after: crate::error::parse_retry_after(&response),
             });
         }
         
@@ -300,12 +285,16 @@ impl SegmentWorker {
             }
         }
         
+        if let Some(cd) = response.headers().get(reqwest::header::CONTENT_DISPOSITION) {
+            if let Ok(cd_str) = cd.to_str() {
+                discovered_filename = Some(cd_str.to_string());
+            }
+        }
+        
         // Stream and write chunks
-        eprintln!("[STREAM-START] id={} segment={}", self.download_id, self.segment.index);
         let mut stream = response.bytes_stream();
         let mut last_db_update = tokio::time::Instant::now();
         let mut last_event_emit = tokio::time::Instant::now();
-        let mut first_chunk = true;
         
         while let Some(chunk_result) = stream.next().await {
             // Check cancellation first
@@ -316,6 +305,7 @@ impl SegmentWorker {
             }
             
             // Check pause - save progress and return Paused error
+            // This allows the HTTP connection to be closed and resumed later
             if self.paused.load(Ordering::Acquire) {
                 info!("Segment {} paused", self.segment.index);
                 self.save_progress().await?;
@@ -324,14 +314,6 @@ impl SegmentWorker {
             
             let chunk = chunk_result?;
             let chunk_len = chunk.len() as u64;
-
-            if first_chunk {
-                first_chunk = false;
-                eprintln!(
-                    "[SEGMENT-RECOVERED] id={} segment={} first_chunk_bytes={}",
-                    self.download_id, self.segment.index, chunk_len
-                );
-            }
             
             // Apply rate limiting
             self.rate_limiter.acquire(chunk_len).await;
@@ -368,11 +350,6 @@ impl SegmentWorker {
         self.segment.complete = true;
         self.save_progress().await?;
         
-        let elapsed_ms = start_time.elapsed().as_millis();
-        eprintln!(
-            "[SEGMENT-DONE] id={} segment={} bytes={} duration_ms={}",
-            self.download_id, self.segment.index, self.segment.downloaded, elapsed_ms
-        );
         info!(
             "Segment {} complete ({} bytes)",
             self.segment.index, self.segment.downloaded
@@ -381,6 +358,7 @@ impl SegmentWorker {
         Ok(SegmentResult {
             path: self.temp_file_path,
             discovered_size,
+            discovered_filename,
         })
     }
     
