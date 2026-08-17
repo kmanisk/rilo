@@ -7,12 +7,12 @@
 [![Platform](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/kmanisk/rilo)
 [![Scoop](https://img.shields.io/badge/scoop-rilo%2Frilo-orange)](https://github.com/kmanisk/scoop-bucket)
 
-[Download](#download) • [Features](#features) • [Install Guide](#install-guide) • [Browser Extension](#browser-extension) • [Architecture](#architecture) • [Build from Source](#build-from-source) • [License](#license)
+[Download](#download) | [Features](#features) | [Install Guide](#install-guide) | [Browser Extension](#browser-extension) | [Architecture](#architecture) | [Build from Source](#build-from-source) | [License](#license)
 
 ---
 
-![Rilo Desktop UI](docs/images/img.png)
-![Rilo Extension](docs/images/extension.png)
+![Rilo Desktop UI](https://raw.githubusercontent.com/kmanisk/rilo/main/docs/images/img.png)
+![Rilo Browser Extension](https://raw.githubusercontent.com/kmanisk/rilo/main/docs/images/extension.png)
 
 ---
 
@@ -24,32 +24,32 @@
 
 ## Features
 
-### ⚡ Speed & Performance
+### Speed & Performance
 * **Dynamic Multi-Segment Acceleration**: Automatically splits files into parallel byte-range connections to saturate available network bandwidth.
 * **Bandwidth Throttling**: Global and per-download token-bucket rate limiting to maintain smooth browsing while downloading.
 * **Connection Pooling**: Optimized HTTP/HTTPS socket reuse for fast response times.
 
-### 🛡️ Reliability & Resilience
+### Reliability & Resilience
 * **HTTP Range Pause & Resume**: Pause active downloads at any moment and resume without data corruption or loss.
 * **SQLite-Backed State Persistence**: Byte offsets, progress logs, and metadata are saved in real-time, surviving sudden crashes or OS reboots.
 * **Automatic Retry System**: Configurable exponential backoff to recover from transient network drops and server errors.
 
-### ⏱️ Scheduling & Automation
+### Scheduling & Automation
 * **Automated Queue Scheduler**: Schedule daily or customized time windows for automated download starts and pauses.
 * **Post-Download Actions**: Automatically trigger system shutdown, sleep, or exit once all downloads complete.
 * **Archive Auto-Extraction**: Automatically extracts `.zip`, `.rar`, `.7z`, `.tar.gz`, `.bz2`, and `.xz` archives upon completion with Zip-Slip path sanitization.
 
-### 🗂️ Organization & File Management
+### Organization & File Management
 * **Hierarchical Category Folders**: Automatically organizes completed files into dedicated `Rilo/<Category>` subfolders (*Compressed*, *Programs*, *Videos*, *Music*, *Pictures*, *Documents*, *Other*).
 * **Clipboard Auto-Detection**: Instant URL detection and parsing directly from clipboard text with preservation of tokens and query parameters.
 * **Custom Save Locations**: Per-download destination and directory overrides.
 
-### 🎨 Interface & Customization
+### Interface & Customization
 * **Dense Desktop Grid View**: Compact, high-information table layout designed for power users without unnecessary whitespace.
 * **Segment Progress Visualizer**: Real-time visual representation of active connection segments, speeds, and byte boundaries.
 * **Curated Themes & Fonts**: Full dark/light theme presets, customizable accent colors, and support for system/custom font stacks (*Inter*, *Geist*, *IBM Plex Sans*, *JetBrains Mono*).
 
-### 🌐 Ecosystem & Integration
+### Ecosystem & Integration
 * **Native Messaging Extension**: Manifest V3 extension for Chrome and Firefox with one-click link interception and context menu options.
 * **Zero-Latency Wakeup**: Automatically launches the desktop application in the background when a download is initiated from the browser.
 
