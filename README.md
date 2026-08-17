@@ -13,8 +13,6 @@
 
 <img src="./docs/images/main.png" alt="Rilo Main Interface" width="850" />
 
-<img src="./docs/images/settings.png" alt="Rilo Settings" width="850" />
-
 ---
 
 ## What is Rilo?
