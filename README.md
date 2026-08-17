@@ -11,8 +11,8 @@
 
 ---
 
-![Rilo Desktop UI](https://raw.githubusercontent.com/kmanisk/rilo/main/docs/images/img.png)
-![Rilo Browser Extension](https://raw.githubusercontent.com/kmanisk/rilo/main/docs/images/extension.png)
+![Rilo Desktop UI](docs/images/main.png)
+![Rilo Settings](docs/images/settings.png)
 
 ---
 
