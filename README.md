@@ -11,8 +11,9 @@
 
 ---
 
-![Rilo Desktop UI](docs/images/main.png)
-![Rilo Settings](docs/images/settings.png)
+<img src="./docs/images/main.png" alt="Rilo Main Interface" width="850" />
+
+<img src="./docs/images/settings.png" alt="Rilo Settings" width="850" />
 
 ---
 
