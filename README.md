@@ -59,7 +59,8 @@
 
 | Platform | Package | Architecture | Download |
 | :--- | :--- | :--- | :--- |
-| **Windows** | NSIS Installer (`.exe`) | `x64` | [Download Installer](https://github.com/kmanisk/rilo/releases/latest) |
+| **Windows** | NSIS Installer (`.exe`) | `x64` | [Download Installer (`Rilo_1.1.0_x64-setup.exe`)](https://github.com/kmanisk/rilo/releases/latest) |
+| **Windows** | Standalone Portable (`.exe`) | `x64` | [Download Portable (`Rilo_1.1.0_x64-portable.exe`)](https://github.com/kmanisk/rilo/releases/latest) |
 | **Windows** | Scoop Package | `x64` | `scoop install rilo/rilo` |
 
 ---
