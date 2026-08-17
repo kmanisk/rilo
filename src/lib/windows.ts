@@ -92,14 +92,14 @@ export async function openCompletionWindow(downloadId: string, title?: string) {
       const win = new WebviewWindow(label, {
         url,
         title: `Completed — ${title || downloadId}`,
-        width: 460,
-        height: 260,
-        minWidth: 420,
-        minHeight: 220,
+        width: 430,
+        height: 160,
+        minWidth: 380,
+        minHeight: 140,
         decorations: false,
         visible: false,
         center: true,
-        resizable: true,
+        resizable: false,
       });
 
       win.once("tauri://created", () => console.info(`[Window] Created JS completion window: ${label}`));

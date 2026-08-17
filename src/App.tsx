@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit, UnlistenFn } from "@tauri-apps/api/event";
-import { DownloadItem, DownloadProgressPayload, DownloadRecord, ExtractionProgressPayload } from "./types";
+import { DownloadItem, DownloadProgressPayload, DownloadRecord, DuplicateDownloadInfo, ExtractionProgressPayload } from "./types";
 import { getCategoryFromFilename } from "./utils";
 import { applyExtractionProgress, progressToDownloadItem, recordToDownloadItem } from "./lib/downloads/mapping";
 import { normalizeDownloadStatus } from "./lib/downloads/status";
-import { applyVisualSettings, AppearanceSettings } from "./lib/settings/visual";
+import { applyVisualSettings, applyUiScaleWindow, AppearanceSettings } from "./lib/settings/visual";
 import { openDownloadDetailsWindow, openCompletionWindow, openTestWindow } from "./lib/windows";
 
 import CustomTitleBar from "./components/CustomTitleBar";
@@ -18,6 +18,7 @@ import UpdateUrlModal from "./components/UpdateUrlModal";
 import AboutModal from "./components/AboutModal";
 import SchedulerModal from "./components/SchedulerModal";
 import DeleteConfirmationModal from "./components/DeleteConfirmationModal";
+import DuplicateDownloadModal from "./components/DuplicateDownloadModal";
 import { SettingsModal, AppConfig } from "./components/SettingsModal";
 
 export default function App() {
@@ -35,10 +36,20 @@ export default function App() {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showSchedulerModal, setShowSchedulerModal] = useState(false);
+  const [duplicateModalInfo, setDuplicateModalInfo] = useState<DuplicateDownloadInfo | null>(null);
+  const [pendingDownloadArgs, setPendingDownloadArgs] = useState<{
+    url: string;
+    customPath?: string;
+    connections?: number;
+    autoExtract?: boolean;
+    extractDir?: string;
+    deleteArchiveAfterExtract?: boolean;
+  } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const completedTrackedRef = useRef<Set<string>>(new Set());
 
+  const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings | null>(null);
   const activeAppearanceRef = useRef<AppearanceSettings | null>(null);
 
   const handleSelectTheme = async (themeId: string) => {
@@ -53,7 +64,9 @@ export default function App() {
         },
       };
       activeAppearanceRef.current = updatedConfig.appearance;
+      setAppearanceSettings(updatedConfig.appearance);
       applyVisualSettings(updatedConfig.appearance);
+      applyUiScaleWindow(updatedConfig.appearance.ui_scale);
       await invoke("update_app_config", { config: updatedConfig });
       emit("rilo-appearance-changed", updatedConfig.appearance).catch(() => {});
       showNotification("Theme updated successfully");
@@ -68,7 +81,9 @@ export default function App() {
       try {
         const appConfig = await invoke<AppConfig>("get_app_config");
         activeAppearanceRef.current = appConfig.appearance;
+        setAppearanceSettings(appConfig.appearance);
         applyVisualSettings(appConfig.appearance);
+        applyUiScaleWindow(appConfig.appearance.ui_scale);
         if (appConfig.appearance.theme) {
           setCurrentThemeId(appConfig.appearance.theme);
         }
@@ -82,10 +97,12 @@ export default function App() {
     listen<AppearanceSettings>("rilo-appearance-changed", (event) => {
       if (event.payload) {
         activeAppearanceRef.current = event.payload;
+        setAppearanceSettings(event.payload);
         if (event.payload.theme) {
           setCurrentThemeId(event.payload.theme);
         }
         applyVisualSettings(event.payload);
+        applyUiScaleWindow(event.payload.ui_scale);
       }
     }).then((un) => { unlisten = un; }).catch(() => {});
 
@@ -113,40 +130,25 @@ export default function App() {
     };
   }, []);
 
-  // Desktop Keyboard Shortcuts (Ctrl+F, Ctrl+N, Space, Delete, Enter, Esc)
+  // Listen for search focus and settings toggle events from global shortcut interceptor
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      } else if ((e.ctrlKey || e.metaKey) && e.key === "n") {
-        e.preventDefault();
-        setShowNewModal(true);
-      } else if (selectedItem) {
-        const statusLower = normalizeDownloadStatus(selectedItem.status);
-        if (e.key === "Delete") {
-          e.preventDefault();
-          handleRemove(selectedItem.id);
-        } else if (e.code === "Space") {
-          e.preventDefault();
-          if (statusLower === "downloading") {
-            handlePause(selectedItem.id);
-          } else if (statusLower === "paused" || statusLower === "queued" || statusLower === "error") {
-            handleResume(selectedItem);
-          }
-        } else if (e.key === "Enter" && statusLower === "completed") {
-          e.preventDefault();
-          handleOpenFile(selectedItem.savePath);
-        }
+    const handleFocusSearch = () => {
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedItem]);
+    const handleToggleSettings = () => {
+      setShowSettingsModal((prev) => !prev);
+    };
+
+    window.addEventListener("rilo:focus-search", handleFocusSearch);
+    window.addEventListener("rilo:toggle-settings", handleToggleSettings);
+    return () => {
+      window.removeEventListener("rilo:focus-search", handleFocusSearch);
+      window.removeEventListener("rilo:toggle-settings", handleToggleSettings);
+    };
+  }, []);
 
   // Load history from SQLite DB on startup
   useEffect(() => {
@@ -265,13 +267,15 @@ export default function App() {
     queueOnly = false,
     autoExtract = false,
     extractDir = "",
-    deleteArchiveAfterExtract = false
+    deleteArchiveAfterExtract = false,
+    allowDuplicate = false
   ) => {
     try {
       const record = await invoke<DownloadRecord>("start_download", {
         url,
         customPath: customPath || null,
         numConnections: connections || 4,
+        allowDuplicate,
       });
 
       const newItem = recordToDownloadItem(record);
@@ -293,9 +297,64 @@ export default function App() {
 
       showNotification("Download task started");
     } catch (err: any) {
+      const errMsg = String(err?.message || err || "");
+      if (errMsg.startsWith("DUPLICATE:")) {
+        try {
+          const dupInfo: DuplicateDownloadInfo = JSON.parse(errMsg.substring("DUPLICATE:".length));
+          setDuplicateModalInfo(dupInfo);
+          setPendingDownloadArgs({
+            url,
+            customPath,
+            connections,
+            autoExtract,
+            extractDir,
+            deleteArchiveAfterExtract,
+          });
+          return;
+        } catch (parseErr) {
+          console.error("Failed to parse duplicate info:", parseErr);
+        }
+      }
       console.error("Failed starting download:", err);
-      showNotification(`Error: ${err?.message || err}`);
+      showNotification(`Error: ${errMsg}`);
     }
+  };
+
+  const handleDownloadAnyway = () => {
+    if (pendingDownloadArgs) {
+      const args = pendingDownloadArgs;
+      setPendingDownloadArgs(null);
+      setDuplicateModalInfo(null);
+      handleStartDownload(
+        args.url,
+        args.customPath,
+        args.connections,
+        false,
+        args.autoExtract,
+        args.extractDir,
+        args.deleteArchiveAfterExtract,
+        true // allowDuplicate
+      );
+    }
+  };
+
+  const handleShowExistingDuplicate = (id: string) => {
+    const existing = downloads[id];
+    if (existing) {
+      setSelectedItem(existing);
+      showNotification(`Viewing existing download: ${existing.filename}`);
+    }
+    setDuplicateModalInfo(null);
+    setPendingDownloadArgs(null);
+  };
+
+  const handleResumeExistingDuplicate = (id: string) => {
+    const existing = downloads[id];
+    if (existing) {
+      handleResume(existing);
+    }
+    setDuplicateModalInfo(null);
+    setPendingDownloadArgs(null);
   };
 
   const handleResume = async (item: DownloadItem) => {
@@ -499,7 +558,11 @@ export default function App() {
     } else if (activeTab === "completed") {
       matchesCategory = statusLower === "completed";
     } else if (activeTab !== "all") {
-      matchesCategory = getCategoryFromFilename(item.filename) === activeTab;
+      const cat = getCategoryFromFilename(item.filename);
+      matchesCategory =
+        activeTab === `cat_${cat}` ||
+        (activeTab === "cat_Archives" && cat === "Compressed") ||
+        (activeTab === "cat_Images" && cat === "Pictures");
     }
 
     let matchesSearch = true;
@@ -513,6 +576,136 @@ export default function App() {
 
     return matchesCategory && matchesSearch;
   });
+
+  // Desktop & Vim-Style Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+
+      // Global Shortcuts: Ctrl+F, Ctrl+,, Ctrl+N
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "," || e.code === "Comma")) {
+        e.preventDefault();
+        setShowSettingsModal((prev) => !prev);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        setShowNewModal(true);
+        return;
+      }
+
+      // If an input is currently focused, do not trigger single-key list shortcuts
+      if (isInput) return;
+
+      // Do not trigger list shortcuts if any modal is currently open
+      const isModalOpen =
+        showNewModal ||
+        showSettingsModal ||
+        showAboutModal ||
+        showSchedulerModal ||
+        !!deleteModalItem ||
+        !!duplicateModalInfo;
+
+      if (isModalOpen) return;
+
+      // Vim / List Shortcuts
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (filteredItems.length === 0) return;
+        if (!selectedItem) {
+          setSelectedItem(filteredItems[0]);
+        } else {
+          const currentIndex = filteredItems.findIndex((item) => item.id === selectedItem.id);
+          if (currentIndex === -1) {
+            setSelectedItem(filteredItems[0]);
+          } else if (currentIndex < filteredItems.length - 1) {
+            setSelectedItem(filteredItems[currentIndex + 1]);
+          }
+        }
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (filteredItems.length === 0) return;
+        if (!selectedItem) {
+          setSelectedItem(filteredItems[filteredItems.length - 1]);
+        } else {
+          const currentIndex = filteredItems.findIndex((item) => item.id === selectedItem.id);
+          if (currentIndex === -1) {
+            setSelectedItem(filteredItems[filteredItems.length - 1]);
+          } else if (currentIndex > 0) {
+            setSelectedItem(filteredItems[currentIndex - 1]);
+          }
+        }
+      } else if (e.key === "Escape") {
+        if (selectedItem) {
+          e.preventDefault();
+          setSelectedItem(null);
+        }
+      } else if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        showNotification("Shortcuts: j/k=Navigate | Enter=Open/Details | p=Pause | r=Resume | d=Delete | c=Cancel | Space=Toggle");
+      } else if (selectedItem) {
+        const statusLower = normalizeDownloadStatus(selectedItem.status);
+
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (statusLower === "completed") {
+            handleOpenFile(selectedItem.savePath);
+          } else {
+            handleOpenDetailsWindow(selectedItem.id, selectedItem.filename);
+          }
+        } else if (e.key === "d" || e.key === "Delete") {
+          e.preventDefault();
+          handleRemove(selectedItem.id);
+        } else if (e.key === "p") {
+          e.preventDefault();
+          if (statusLower === "downloading" || statusLower === "reconnecting") {
+            handlePause(selectedItem.id);
+          }
+        } else if (e.key === "r") {
+          e.preventDefault();
+          if (statusLower === "paused" || statusLower === "queued" || statusLower === "error" || statusLower === "cancelled") {
+            handleResume(selectedItem);
+          }
+        } else if (e.key === "c") {
+          e.preventDefault();
+          if (statusLower === "downloading" || statusLower === "queued" || statusLower === "paused" || statusLower === "reconnecting") {
+            handleCancel(selectedItem.id);
+          }
+        } else if (e.code === "Space") {
+          e.preventDefault();
+          if (statusLower === "downloading" || statusLower === "reconnecting") {
+            handlePause(selectedItem.id);
+          } else if (statusLower === "paused" || statusLower === "queued" || statusLower === "error") {
+            handleResume(selectedItem);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    filteredItems,
+    selectedItem,
+    showNewModal,
+    showSettingsModal,
+    showAboutModal,
+    showSchedulerModal,
+    deleteModalItem,
+    duplicateModalInfo,
+  ]);
 
   const hasCompleted = itemsList.some((i) => normalizeDownloadStatus(i.status) === "completed");
 
@@ -532,13 +725,13 @@ export default function App() {
   };
 
   const categoryCounts = {
-    Videos: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Videos").length,
-    Music: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Music").length,
-    Documents: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Documents").length,
-    Programs: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Programs").length,
-    Archives: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Archives").length,
-    Images: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Images").length,
-    Other: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "cat_Other").length,
+    Compressed: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Compressed").length,
+    Programs: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Programs").length,
+    Videos: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Videos").length,
+    Music: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Music").length,
+    Pictures: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Pictures").length,
+    Documents: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Documents").length,
+    Other: itemsList.filter((i) => getCategoryFromFilename(i.filename) === "Other").length,
   };
 
   const totalSpeedBps = itemsList.reduce((acc, i) => acc + (i.speedBps || 0), 0);
@@ -562,6 +755,7 @@ export default function App() {
         onDeleteSelected={() => selectedItem && setDeleteModalItem(selectedItem)}
         currentThemeId={currentThemeId}
         onSelectTheme={handleSelectTheme}
+        compactTopBar={appearanceSettings?.compact_top_bar !== false}
       />
 
       {/* 2. Dense Command Toolbar */}
@@ -579,6 +773,7 @@ export default function App() {
         onOpenScheduler={() => setShowSchedulerModal(true)}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenTestWindow={handleOpenTestWindow}
+        showIconLabels={appearanceSettings?.show_icon_labels !== false}
       />
 
       {/* 3. Main Body Split: Sidebar + Download Table */}
@@ -608,6 +803,7 @@ export default function App() {
               onOpenDetails={(item) => handleOpenDetailsWindow(item.id, item.filename)}
               onOpenDetailsWindow={(item) => handleOpenDetailsWindow(item.id, item.filename)}
               onNewTask={() => setShowNewModal(true)}
+              useRelativeDateTime={appearanceSettings?.use_relative_date_time !== false}
             />
           </div>
         </main>
@@ -632,6 +828,8 @@ export default function App() {
         <NewDownloadModal
           onClose={() => setShowNewModal(false)}
           onStartDownload={handleStartDownload}
+          onShowExisting={handleShowExistingDuplicate}
+          onResumeExisting={handleResumeExistingDuplicate}
         />
       )}
 
@@ -668,6 +866,19 @@ export default function App() {
           item={deleteModalItem}
           onClose={() => setDeleteModalItem(null)}
           onConfirmDelete={() => handleDeleteFileDisk(deleteModalItem)}
+        />
+      )}
+
+      {duplicateModalInfo && (
+        <DuplicateDownloadModal
+          duplicate={duplicateModalInfo}
+          onClose={() => {
+            setDuplicateModalInfo(null);
+            setPendingDownloadArgs(null);
+          }}
+          onResume={handleResumeExistingDuplicate}
+          onShowExisting={handleShowExistingDuplicate}
+          onDownloadAnyway={handleDownloadAnyway}
         />
       )}
     </div>

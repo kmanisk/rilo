@@ -1,8 +1,16 @@
 use crate::config::AppConfig;
 use crate::download::DownloadManager;
-use crate::models::DownloadRecord;
+use crate::models::{DownloadRecord, DuplicateDownloadInfo};
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
+
+#[tauri::command]
+pub async fn check_duplicate_download(
+    state: State<'_, DownloadManager>,
+    url: String,
+) -> Result<Option<DuplicateDownloadInfo>, String> {
+    state.check_duplicate(&url).await
+}
 
 #[tauri::command]
 pub async fn start_download(
@@ -13,8 +21,9 @@ pub async fn start_download(
     custom_path: Option<String>,
     speed_limit: Option<u64>,
     num_connections: Option<u32>,
+    allow_duplicate: Option<bool>,
 ) -> Result<DownloadRecord, String> {
-    eprintln!("[CREATE] url={} custom_path={:?}", url, custom_path);
+    eprintln!("[CREATE] url={} custom_path={:?} allow_duplicate={:?}", url, custom_path, allow_duplicate);
 
     if let Err(e) = reqwest::Url::parse(&url) {
         eprintln!("[ERROR] invalid url address: {}", e);
@@ -29,6 +38,7 @@ pub async fn start_download(
             speed_limit,
             num_connections,
             false,
+            allow_duplicate.unwrap_or(false),
         )
         .await
 }
@@ -58,6 +68,7 @@ pub async fn resume_download(
             custom_path,
             speed_limit,
             num_connections,
+            true,
             true,
         )
         .await
@@ -178,8 +189,10 @@ pub async fn update_app_config(
             config.download.download_directory = user_downloads.to_string_lossy().to_string();
         }
     }
-    let mut cfg = state.app_config.lock().await;
-    *cfg = config.clone();
+    {
+        let mut cfg = state.app_config.lock().await;
+        *cfg = config.clone();
+    }
 
     if let Some(parent) = state.config_path.parent() {
         let _ = tokio::fs::create_dir_all(parent).await;
@@ -426,12 +439,19 @@ pub async fn get_archive_info(archive_path: String) -> Result<ArchiveInfo, Strin
 
 #[tauri::command]
 pub async fn update_download_extraction_config(
-    _state: State<'_, DownloadManager>,
-    _download_id: String,
-    _auto_extract: bool,
-    _extract_dir: Option<String>,
-    _delete_after: Option<bool>,
+    state: State<'_, DownloadManager>,
+    download_id: String,
+    auto_extract: bool,
+    extract_dir: Option<String>,
+    delete_after: Option<bool>,
 ) -> Result<(), String> {
+    state.db.save_setting(&format!("extract_auto_{}", download_id), if auto_extract { "true" } else { "false" }).await?;
+    if let Some(dir) = extract_dir {
+        state.db.save_setting(&format!("extract_dir_{}", download_id), &dir).await?;
+    }
+    if let Some(del) = delete_after {
+        state.db.save_setting(&format!("extract_delete_{}", download_id), if del { "true" } else { "false" }).await?;
+    }
     Ok(())
 }
 
@@ -487,11 +507,15 @@ pub async fn open_details_window(
     download_id: String,
     title: String,
 ) -> Result<(), String> {
-    if let Ok(records) = state.db.get_all().await {
-        if !records.iter().any(|r| r.id == download_id) {
+    let is_completed = if let Ok(records) = state.db.get_all().await {
+        if let Some(r) = records.iter().find(|r| r.id == download_id) {
+            r.status == "completed"
+        } else {
             return Err("Download is no longer available".to_string());
         }
-    }
+    } else {
+        false
+    };
 
     let clean_id = download_id.replace(['-', ' '], "_");
     let label = format!("rilo-download-details-{}", clean_id);
@@ -504,15 +528,21 @@ pub async fn open_details_window(
     }
 
     let url = format!("index.html?window=details&details_id={}", download_id);
+    let (width, height, min_w, min_h, resizable) = if is_completed {
+        (430.0, 160.0, 360.0, 140.0, false)
+    } else {
+        (560.0, 440.0, 360.0, 140.0, true)
+    };
+
     let builder =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
             .title(format!("Download Details — {}", title))
-            .inner_size(560.0, 440.0)
-            .min_inner_size(480.0, 340.0)
+            .inner_size(width, height)
+            .min_inner_size(min_w, min_h)
             .decorations(false)
             .visible(false)
             .center()
-            .resizable(true)
+            .resizable(resizable)
             .focused(true);
 
     builder.build().map_err(|e| e.to_string())?;
@@ -540,12 +570,12 @@ pub async fn open_completion_window(
     let builder =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
             .title(window_title)
-            .inner_size(460.0, 260.0)
-            .min_inner_size(420.0, 220.0)
+            .inner_size(460.0, 180.0)
+            .min_inner_size(380.0, 140.0)
             .decorations(false)
             .visible(false)
             .center()
-            .resizable(true)
+            .resizable(false)
             .focused(true);
 
     builder.build().map_err(|e| e.to_string())?;
@@ -637,5 +667,60 @@ pub async fn test_proxy_connection(proxy_url: String) -> Result<bool, String> {
     match client.get("https://httpbin.org/ip").send().await {
         Ok(res) => Ok(res.status().is_success()),
         Err(e) => Err(format!("Proxy test failed: {}", e)),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UrlMetadata {
+    pub size: Option<u64>,
+    pub filename: Option<String>,
+    pub content_type: Option<String>,
+    pub accept_ranges: bool,
+    pub resumable: bool,
+}
+
+#[tauri::command]
+pub async fn fetch_url_metadata(
+    url: String,
+    manager: State<'_, DownloadManager>,
+) -> Result<UrlMetadata, String> {
+    let info = manager.probe_link(&url).await?;
+
+    let filename = if info.filename.is_empty() || info.filename == "download" || info.filename == "unknown" {
+        None
+    } else {
+        Some(info.filename)
+    };
+
+    Ok(UrlMetadata {
+        size: info.size,
+        filename,
+        content_type: info.content_type,
+        accept_ranges: info.resumable,
+        resumable: info.resumable,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_probe_hetzner_metadata() {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .unwrap();
+
+        // Use Range GET fallback for resilient probing
+        let res = client
+            .get("https://ash-speed.hetzner.com/100MB.bin")
+            .header(reqwest::header::RANGE, "bytes=0-0")
+            .send()
+            .await
+            .unwrap();
+        assert!(res.status().is_success() || res.status() == reqwest::StatusCode::PARTIAL_CONTENT);
+        let cr = res.headers().get(reqwest::header::CONTENT_RANGE).unwrap().to_str().unwrap();
+        let total_part = cr.split('/').last().unwrap();
+        let size = total_part.parse::<u64>().unwrap();
+        assert_eq!(size, 104_857_600);
     }
 }

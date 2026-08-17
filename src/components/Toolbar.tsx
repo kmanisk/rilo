@@ -27,6 +27,7 @@ interface ToolbarProps {
   onOpenScheduler: () => void;
   onOpenSettings: () => void;
   onOpenTestWindow?: () => void;
+  showIconLabels?: boolean;
 }
 
 export default function Toolbar({
@@ -40,6 +41,7 @@ export default function Toolbar({
   onOpenScheduler,
   onOpenSettings,
   onOpenTestWindow,
+  showIconLabels = true,
 }: ToolbarProps) {
   const statusLower = normalizeDownloadStatus(selectedItem?.status);
   const isDownloading = isActiveDownload(statusLower);
@@ -84,7 +86,7 @@ export default function Toolbar({
             title="Resume selected download"
           >
             <Play className={`w-4 h-4 ${canResume ? "text-emerald-400" : "text-rilo-muted"}`} />
-            <span className="text-[11px] font-medium">Resume</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Resume</span>}
           </button>
 
           <button
@@ -99,7 +101,7 @@ export default function Toolbar({
             title="Pause selected download"
           >
             <Pause className={`w-4 h-4 ${canPause ? "text-amber-400" : "text-rilo-muted"}`} />
-            <span className="text-[11px] font-medium">Pause</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Pause</span>}
           </button>
         </div>
 
@@ -114,7 +116,7 @@ export default function Toolbar({
             title="Start Queue (Feature coming soon)"
           >
             <Play className="w-4 h-4 text-rilo-muted" />
-            <span className="text-[11px] font-medium">Start Queue</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Start Queue</span>}
           </button>
 
           <button
@@ -124,7 +126,7 @@ export default function Toolbar({
             title="Stop Queue (Feature coming soon)"
           >
             <Square className="w-4 h-4 text-rilo-muted" />
-            <span className="text-[11px] font-medium">Stop Queue</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Stop Queue</span>}
           </button>
 
           <button
@@ -134,7 +136,7 @@ export default function Toolbar({
             title="Open Queue Scheduler"
           >
             <CalendarClock className="w-4 h-4 text-rilo-accent" />
-            <span className="text-[11px] font-medium">Queues</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Queues</span>}
           </button>
         </div>
 
@@ -154,7 +156,7 @@ export default function Toolbar({
             title="Stop selected task"
           >
             <Square className={`w-4 h-4 ${canStop ? "text-rose-400" : "text-rilo-muted"}`} />
-            <span className="text-[11px] font-medium">Stop All</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Stop All</span>}
           </button>
 
           <button
@@ -169,7 +171,7 @@ export default function Toolbar({
             title="Delete selected download"
           >
             <Trash2 className={`w-4 h-4 ${canDelete ? "text-rilo-primary" : "text-rilo-muted"}`} />
-            <span className="text-[11px] font-medium">Delete</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Delete</span>}
           </button>
         </div>
 
@@ -190,7 +192,7 @@ export default function Toolbar({
               title="Open task details inspector window"
             >
               <Info className="w-4 h-4" />
-              <span className="text-[11px] font-medium">Details</span>
+              {showIconLabels && <span className="text-[11px] font-medium">Details</span>}
             </button>
           )}
 
@@ -201,7 +203,7 @@ export default function Toolbar({
             title="Settings Preferences"
           >
             <Settings className="w-4 h-4 text-rilo-muted" />
-            <span className="text-[11px] font-medium">Settings</span>
+            {showIconLabels && <span className="text-[11px] font-medium">Settings</span>}
           </button>
         </div>
       </div>

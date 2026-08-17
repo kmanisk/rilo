@@ -39,11 +39,16 @@ pub fn get_category_folder_name(filename: &str) -> &'static str {
 }
 
 /// Resolves the final destination directory for a download.
-/// If `use_category` is true, appends the category folder name to `base_dir`.
+/// If `use_category` is true, nests the download inside `Rilo/<Category>` under `base_dir`.
 pub fn resolve_final_download_dir(base_dir: &Path, use_category: bool, filename: &str) -> PathBuf {
     if use_category {
         let cat = get_category_folder_name(filename);
-        base_dir.join(cat)
+        let base_str = base_dir.to_string_lossy().to_lowercase();
+        if base_str.ends_with("rilo") || base_str.ends_with("rilo/") || base_str.ends_with("rilo\\") {
+            base_dir.join(cat)
+        } else {
+            base_dir.join("Rilo").join(cat)
+        }
     } else {
         base_dir.to_path_buf()
     }
@@ -70,7 +75,7 @@ mod tests {
         let base = PathBuf::from("C:\\Downloads");
         assert_eq!(
             resolve_final_download_dir(&base, true, "archive.zip"),
-            base.join("Compressed")
+            base.join("Rilo").join("Compressed")
         );
         assert_eq!(
             resolve_final_download_dir(&base, false, "archive.zip"),

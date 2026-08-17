@@ -21,6 +21,8 @@ export default function SchedulerModal({ isOpen, onClose }: SchedulerModalProps)
 
   useEffect(() => {
     if (!isOpen) return;
+    let isMounted = true;
+
     async function loadScheduleSettings() {
       try {
         const enabled = await invoke<string | null>("get_setting", { key: "schedule_enabled" });
@@ -29,16 +31,21 @@ export default function SchedulerModal({ isOpen, onClose }: SchedulerModalProps)
         const concurrent = await invoke<string | null>("get_setting", { key: "max_concurrent_downloads" });
         const action = await invoke<string | null>("get_setting", { key: "post_download_action" });
 
-        if (enabled !== null) setScheduleEnabled(enabled === "true");
-        if (start) setStartTime(start);
-        if (stop) setStopTime(stop);
-        if (concurrent) setMaxConcurrent(Number(concurrent) || 4);
-        if (action) setPostAction(action);
+        if (isMounted) {
+          if (enabled !== null) setScheduleEnabled(enabled === "true");
+          if (start) setStartTime(start);
+          if (stop) setStopTime(stop);
+          if (concurrent) setMaxConcurrent(Number(concurrent) || 4);
+          if (action) setPostAction(action);
+        }
       } catch (err) {
         console.error("Error loading schedule settings:", err);
       }
     }
     loadScheduleSettings();
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen]);
 
   const handleSave = async () => {
@@ -63,7 +70,7 @@ export default function SchedulerModal({ isOpen, onClose }: SchedulerModalProps)
 
   return (
     <div className="fixed inset-0 z-50 bg-rilo-overlay backdrop-blur-xs flex items-center justify-center p-4 font-sans select-none">
-      <div className="bg-rilo-surface border border-rilo-border rounded-xl shadow-2xl w-full max-w-md overflow-hidden text-xs text-rilo-primary space-y-4 p-5">
+      <div className="bg-rilo-surface border border-rilo-border rounded-xl rilo-modal-shadow w-full max-w-md overflow-hidden text-xs text-rilo-primary space-y-4 p-5">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-rilo-border pb-3">
           <div className="flex items-center space-x-2">

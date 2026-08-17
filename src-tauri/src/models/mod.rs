@@ -46,6 +46,18 @@ pub struct DownloadProgressPayload {
     pub segments: Vec<crate::core::monitor::payload::SegmentProgressPayload>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateDownloadInfo {
+    pub id: String,
+    pub filename: String,
+    pub url: String,
+    pub status: String,
+    pub save_path: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub file_exists_on_disk: bool,
+}
+
 pub enum DownloadCommand {
     Pause,
     Cancel,

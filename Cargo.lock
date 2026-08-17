@@ -1078,8 +1078,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "dlman-core"
-version = "0.1.0"
+name = "dlengine"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1104,11 +1104,12 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "zip",
 ]
 
 [[package]]
 name = "dlman-types"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -1163,12 +1164,12 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "downloader"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "bzip2 0.6.1",
  "chrono",
  "dirs 5.0.1",
- "dlman-core",
+ "dlengine",
  "dlman-types",
  "drag",
  "flate2",

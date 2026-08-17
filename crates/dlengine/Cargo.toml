@@ -1,10 +1,10 @@
 [package]
-name = "dlman-core"
+name = "dlengine"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Core download engine for DLMan"
+description = "Core download engine for Rilo"
 
 [dependencies]
 dlman-types = { workspace = true }
@@ -48,6 +48,9 @@ async-trait = "0.1"
 
 # XML parsing (for DASH MPD)
 quick-xml = "0.36"
+
+# Archive extraction
+zip = "2.2.2"
 
 [dev-dependencies]
 tokio-test = "0.4"

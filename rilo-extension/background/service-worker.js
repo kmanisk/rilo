@@ -101,6 +101,8 @@ async function sendDownloadToRilo(url, pageUrl, pageTitle) {
     source: 'browser',
   };
 
+  recordRecentDownload(payload.url, payload.filename, 'Sent to Rilo');
+
   if (chrome.runtime.sendNativeMessage) {
     chrome.runtime.sendNativeMessage(NATIVE_HOST_ID, payload, (response) => {
       if (chrome.runtime.lastError) {
@@ -116,6 +118,25 @@ async function sendDownloadToRilo(url, pageUrl, pageTitle) {
     });
   } else {
     fallbackHttpSend(payload);
+  }
+}
+
+function recordRecentDownload(url, filename, status = 'Sent to Rilo') {
+  try {
+    chrome.storage.local.get({ recentDownloads: [] }, (res) => {
+      const list = res.recentDownloads || [];
+      const item = {
+        id: Date.now().toString(),
+        url,
+        filename: filename || extractFilename(url),
+        timestamp: Date.now(),
+        status,
+      };
+      const updated = [item, ...list.filter((x) => x.url !== url)].slice(0, 10);
+      chrome.storage.local.set({ recentDownloads: updated });
+    });
+  } catch (err) {
+    console.error('Failed to record recent download:', err);
   }
 }
 
@@ -137,14 +158,17 @@ async function fallbackHttpSend(payload) {
 }
 
 function showNotification(title, message) {
-  if (chrome.notifications) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: '../icons/icon48.png',
-      title: title,
-      message: message,
-    });
-  }
+  chrome.storage.sync.get({ showNotifications: true }, (res) => {
+    if (res.showNotifications === false) return;
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: '../icons/icon48.png',
+        title: title,
+        message: message,
+      });
+    }
+  });
 }
 
 function extractFilename(urlStr) {

@@ -39,6 +39,13 @@ pub enum DlmanError {
     #[error("Download already exists: {0}")]
     AlreadyExists(Uuid),
 
+    #[error("Duplicate download: {filename} ({id}) is already {status}")]
+    DuplicateDownload {
+        id: Uuid,
+        filename: String,
+        status: String,
+    },
+
     #[error("Server error: {status} - {message}")]
     ServerError {
         status: u16,

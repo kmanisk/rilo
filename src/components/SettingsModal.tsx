@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Select } from './ui/Select';
+import { Switch } from './ui/Switch';
+import { Tooltip } from './ui/Tooltip';
 import { AppearanceSettings, applyVisualSettings, getSystemAppearance } from '../lib/settings/visual';
 import { riloThemes, getDarkThemes, getLightThemes } from '../lib/themes/themes';
 import {
@@ -106,22 +108,24 @@ function SettingRow({
   children: preact.ComponentChildren;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-4 py-3 min-h-[48px]">
-      <div className="space-y-1 min-w-0 pr-2">
-        <div className="flex items-center space-x-1.5 flex-wrap">
-          <span className="text-xs font-semibold text-rilo-primary tracking-tight">{label}</span>
+    <div className={`flex justify-between gap-4 py-3 min-h-[44px] ${subtext ? 'items-start' : 'items-center'}`}>
+      <div className="space-y-0.5 min-w-0 pr-2 flex-1 break-words">
+        <div className="flex items-center space-x-1.5 leading-none">
+          <span className="text-xs font-semibold text-rilo-primary tracking-tight leading-normal break-words">{label}</span>
           {tooltip && (
-            <span
-              className="text-[10px] text-rilo-muted hover:text-rilo-primary cursor-help border border-rilo-subtle rounded-full w-3.5 h-3.5 inline-flex items-center justify-center font-mono shrink-0"
-              title={tooltip}
-            >
-              ?
-            </span>
+            <Tooltip content={tooltip} side="top">
+              <span
+                className="text-[10px] text-rilo-muted hover:text-rilo-primary hover:border-rilo-accent/50 cursor-help border border-rilo-subtle rounded-full w-3.5 h-3.5 inline-flex items-center justify-center font-mono shrink-0 select-none transition-colors"
+                title={tooltip}
+              >
+                ?
+              </span>
+            </Tooltip>
           )}
         </div>
-        {subtext && <p className="text-[11px] text-rilo-muted leading-snug">{subtext}</p>}
+        {subtext && <p className="text-[11px] text-rilo-muted leading-relaxed mt-0.5 break-words">{subtext}</p>}
       </div>
-      <div className="flex items-center justify-end justify-self-end shrink-0">
+      <div className={`flex items-center justify-end shrink-0 ${subtext ? 'pt-0.5' : ''}`}>
         {children}
       </div>
     </div>
@@ -130,7 +134,7 @@ function SettingRow({
 
 function SettingsGroup({ children }: { children: preact.ComponentChildren }) {
   return (
-    <div className="bg-rilo-elevated border border-rilo-subtle rounded-xl px-4 py-1 divide-y divide-rilo-subtle/70 shadow-xs mb-4">
+    <div className="bg-rilo-elevated border border-rilo-border/40 rounded-xl px-4 py-1.5 space-y-0.5 shadow-xs mb-4">
       {children}
     </div>
   );
@@ -145,30 +149,15 @@ function SwitchToggle({
   onChange: (checked: boolean) => void;
   disabled?: boolean;
 }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer focus:outline-none ${
-        checked ? 'bg-rilo-accent' : 'bg-rilo-border'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-    >
-      <span
-        className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-transform ${
-          checked ? 'translate-x-4.5' : 'translate-x-0.75'
-        }`}
-      />
-    </button>
-  );
+  return <Switch checked={checked} onChange={onChange} disabled={disabled} />;
 }
+
+let cachedAppConfig: AppConfig | null = null;
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'appearance' | 'downloads' | 'proxy' | 'credentials' | 'scheduler' | 'browser'>('appearance');
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [persistedConfig, setPersistedConfig] = useState<AppConfig | null>(null);
+  const [config, setConfig] = useState<AppConfig | null>(() => cachedAppConfig);
+  const [persistedConfig, setPersistedConfig] = useState<AppConfig | null>(() => cachedAppConfig);
 
   // Site Credentials State
   const [credentials, setCredentials] = useState<SiteCredential[]>([]);
@@ -183,26 +172,52 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   useEffect(() => {
     if (!isOpen) return;
+    let isMounted = true;
+
     async function loadConfig() {
       try {
         const loadedConfig = await invoke<AppConfig>('get_app_config');
-        setConfig(loadedConfig);
-        setPersistedConfig(loadedConfig);
-        applyVisualSettings(loadedConfig.appearance);
+        cachedAppConfig = loadedConfig;
+        if (isMounted) {
+          setConfig(loadedConfig);
+          setPersistedConfig(loadedConfig);
+          applyVisualSettings(loadedConfig.appearance);
+        }
       } catch (err) {
         console.error('Failed loading app config:', err);
+        if (isMounted && !config && !cachedAppConfig) {
+          try {
+            const fallback = await invoke<AppConfig>('reset_app_config');
+            cachedAppConfig = fallback;
+            if (isMounted) {
+              setConfig(fallback);
+              setPersistedConfig(fallback);
+              applyVisualSettings(fallback.appearance);
+            }
+          } catch (resetErr) {
+            console.error('Fallback config reset failed:', resetErr);
+          }
+        }
       }
     }
+
     async function loadCreds() {
       try {
         const creds = await invoke<SiteCredential[]>('get_site_credentials');
-        setCredentials(creds);
+        if (isMounted) {
+          setCredentials(creds);
+        }
       } catch (err) {
         console.error('Failed loading site credentials:', err);
       }
     }
+
     loadConfig();
     loadCreds();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen]);
 
   const updateLocalConfig = (newConfig: AppConfig) => {
@@ -212,31 +227,209 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   };
 
   const handleSave = async () => {
-    if (config) {
-      try {
+    try {
+      if (config) {
         await invoke('update_app_config', { config });
+        cachedAppConfig = config;
         setPersistedConfig(config);
         applyVisualSettings(config.appearance);
         emit('rilo-appearance-changed', config.appearance).catch(() => {});
-      } catch (err) {
-        console.error('Failed saving config:', err);
       }
+    } catch (err) {
+      console.error('Failed saving config:', err);
+    } finally {
+      onClose();
     }
-    onClose();
   };
 
   const handleCancel = () => {
-    if (persistedConfig) {
-      setConfig(persistedConfig);
-      applyVisualSettings(persistedConfig.appearance);
-      emit('rilo-appearance-changed', persistedConfig.appearance).catch(() => {});
+    try {
+      if (persistedConfig) {
+        setConfig(persistedConfig);
+        applyVisualSettings(persistedConfig.appearance);
+        emit('rilo-appearance-changed', persistedConfig.appearance).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed cancelling config:', err);
+    } finally {
+      onClose();
     }
-    onClose();
   };
+
+  const [focusedPane, setFocusedPane] = useState<'sidebar' | 'content'>('sidebar');
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFocusedPane('sidebar');
+    }
+  }, [isOpen]);
+
+  const getFocusableControls = () => {
+    if (!contentRef.current) return [];
+    return Array.from(
+      contentRef.current.querySelectorAll<HTMLElement>(
+        'select, input:not([type="hidden"]), button, textarea, [role="switch"]'
+      )
+    ).filter(
+      (el) =>
+        !el.hasAttribute('disabled') &&
+        el.tabIndex !== -1 &&
+        el.offsetParent !== null
+    );
+  };
+
+  // Two-Pane Vim (j/k/h/l) & Arrow Key Navigation for Settings
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const tabs: Array<'appearance' | 'downloads' | 'proxy' | 'credentials' | 'scheduler' | 'browser'> = [
+      'appearance',
+      'downloads',
+      'proxy',
+      'credentials',
+      'scheduler',
+      'browser',
+    ];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape handling
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (showAddCredModal) {
+          setShowAddCredModal(false);
+          return;
+        }
+        if (focusedPane === 'content') {
+          setFocusedPane('sidebar');
+          (document.activeElement as HTMLElement)?.blur();
+          return;
+        }
+        handleCancel();
+        return;
+      }
+
+      // Ctrl+S / Cmd+S: Quick Save
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleSave();
+        return;
+      }
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isTextInput =
+        (activeEl instanceof HTMLInputElement && (activeEl.type === 'text' || activeEl.type === 'password' || activeEl.type === 'number')) ||
+        activeEl instanceof HTMLTextAreaElement;
+
+      // Direct Tab Jump with numbers 1..6 (when not typing inside a text field)
+      if (!isTextInput && e.key >= '1' && e.key <= '6') {
+        const tabIndex = parseInt(e.key, 10) - 1;
+        if (tabs[tabIndex]) {
+          e.preventDefault();
+          setActiveTab(tabs[tabIndex]);
+          setFocusedPane('sidebar');
+          return;
+        }
+      }
+
+      // -------------------------------------------------------------
+      // SIDEBAR PANE NAVIGATION (left tab list)
+      // -------------------------------------------------------------
+      if (focusedPane === 'sidebar') {
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const currentIndex = tabs.indexOf(activeTab);
+          const nextIndex = (currentIndex + 1) % tabs.length;
+          setActiveTab(tabs[nextIndex]);
+        } else if (e.key === 'k' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const currentIndex = tabs.indexOf(activeTab);
+          const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+          setActiveTab(tabs[prevIndex]);
+        } else if (e.key === 'l' || e.key === 'ArrowRight' || e.key === 'Enter') {
+          e.preventDefault();
+          setFocusedPane('content');
+          setTimeout(() => {
+            const controls = getFocusableControls();
+            if (controls.length > 0) {
+              controls[0].focus();
+            }
+          }, 30);
+        }
+        return;
+      }
+
+      // -------------------------------------------------------------
+      // CONTENT PANE NAVIGATION (right settings area)
+      // -------------------------------------------------------------
+      if (focusedPane === 'content') {
+        const controls = getFocusableControls();
+        const currentIdx = activeEl ? controls.indexOf(activeEl) : -1;
+
+        // If typing in a text field, preserve standard cursor navigation
+        if (isTextInput) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentIdx !== -1 && currentIdx < controls.length - 1) {
+              controls[currentIdx + 1].focus();
+            } else {
+              handleSave();
+            }
+          }
+          return;
+        }
+
+        // 'h' or 'ArrowLeft' to exit back outside to the sidebar
+        if (e.key === 'h' || e.key === 'ArrowLeft') {
+          if (e.key === 'h' || activeEl?.tagName !== 'SELECT') {
+            e.preventDefault();
+            setFocusedPane('sidebar');
+            activeEl?.blur();
+            return;
+          }
+        }
+
+        // 'j' / 'ArrowDown': Move to next setting control
+        if (e.key === 'j' || e.key === 'ArrowDown') {
+          if (e.key === 'j' || activeEl?.tagName !== 'SELECT') {
+            e.preventDefault();
+            if (currentIdx !== -1 && currentIdx < controls.length - 1) {
+              controls[currentIdx + 1].focus();
+            } else if (currentIdx === -1 && controls.length > 0) {
+              controls[0].focus();
+            }
+          }
+        } else if (e.key === 'k' || e.key === 'ArrowUp') {
+          // 'k' / 'ArrowUp': Move to previous setting control
+          if (e.key === 'k' || activeEl?.tagName !== 'SELECT') {
+            e.preventDefault();
+            if (currentIdx > 0) {
+              controls[currentIdx - 1].focus();
+            } else if (currentIdx === 0 || currentIdx === -1) {
+              setFocusedPane('sidebar');
+              activeEl?.blur();
+            }
+          }
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          if (activeEl?.tagName === 'BUTTON' || activeEl?.getAttribute('role') === 'switch') {
+            // Handled natively by button / switch
+          } else if (activeEl?.tagName !== 'SELECT') {
+            e.preventDefault();
+            handleSave();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, activeTab, focusedPane, showAddCredModal, config, persistedConfig]);
 
   const handleResetDefaults = async () => {
     try {
       const defaultConfig = await invoke<AppConfig>('reset_app_config');
+      cachedAppConfig = defaultConfig;
       setConfig(defaultConfig);
       setPersistedConfig(defaultConfig);
       applyVisualSettings(defaultConfig.appearance);
@@ -315,7 +508,32 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  if (!isOpen || !config) return null;
+  if (!isOpen) return null;
+
+  if (!config) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-4 select-none">
+        <div className="bg-rilo-surface border border-rilo-border/60 rounded-xl rilo-modal-shadow w-[860px] max-w-[95vw] h-[580px] max-h-[90vh] flex flex-col overflow-hidden font-sans text-rilo-primary">
+          <div className="px-5 py-3 border-b border-rilo-border/50 bg-rilo-surface flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center space-x-2">
+              <SettingsIcon className="w-4 h-4 text-rilo-accent animate-spin" />
+              <h2 className="text-sm font-bold text-rilo-primary">Settings</h2>
+            </div>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-rilo-muted hover:text-rilo-primary hover:bg-rilo-elevated transition-colors p-1 rounded cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center text-rilo-muted text-xs">
+            Loading configuration...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const currentMode = (config.appearance.mode || 'system').toLowerCase();
   const effectiveMode = currentMode === 'system' ? getSystemAppearance() : (currentMode as 'dark' | 'light');
@@ -335,9 +553,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-rilo-overlay backdrop-blur-xs p-4 animate-in fade-in duration-150 select-none">
-      <div className="bg-rilo-surface border border-rilo-subtle rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden font-sans text-rilo-primary">
+      <div className="bg-rilo-surface border border-rilo-border/60 rounded-xl rilo-modal-shadow w-[860px] max-w-[95vw] h-[580px] max-h-[90vh] flex flex-col overflow-hidden font-sans text-rilo-primary">
         {/* Header */}
-        <div className="px-5 py-3 border-b border-rilo-subtle bg-rilo-surface flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-3 border-b border-rilo-border/50 bg-rilo-surface flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-2">
             <SettingsIcon className="w-4 h-4 text-rilo-accent" />
             <h2 className="text-sm font-bold text-rilo-primary">Settings</h2>
@@ -352,97 +570,51 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         {/* Body Layout: Sidebar + Main Content */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Left Sidebar */}
-          <aside className="w-52 bg-rilo-surface border-r border-rilo-subtle p-2.5 flex flex-col flex-shrink-0">
+          <aside ref={sidebarRef as any} className="w-52 h-full bg-rilo-surface border-r border-rilo-border/50 p-2.5 flex flex-col flex-shrink-0 overflow-y-auto custom-scrollbar">
             <nav className="space-y-1 font-sans text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveTab('appearance')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'appearance'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <Palette className="w-4 h-4 text-rilo-accent" />
-                <span>Appearance</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('downloads')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'downloads'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <CloudDownload className="w-4 h-4 text-rilo-accent" />
-                <span>Download Engine</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('proxy')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'proxy'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <Globe className="w-4 h-4 text-rilo-accent" />
-                <span>Proxy & Network</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('credentials')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'credentials'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <Key className="w-4 h-4 text-rilo-accent" />
-                <span>Saved Logins</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('scheduler')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'scheduler'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <CalendarClock className="w-4 h-4 text-rilo-accent" />
-                <span>Scheduler</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('browser')}
-                className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all cursor-pointer ${
-                  activeTab === 'browser'
-                    ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs'
-                    : 'text-rilo-secondary hover:text-rilo-primary hover:bg-rilo-elevated'
-                }`}
-              >
-                <ArrowLeftRight className="w-4 h-4 text-rilo-accent" />
-                <span>Browser Integration</span>
-              </button>
+              {[
+                { id: 'appearance', label: 'Appearance', icon: Palette },
+                { id: 'downloads', label: 'Download Engine', icon: CloudDownload },
+                { id: 'proxy', label: 'Proxy & Network', icon: Globe },
+                { id: 'credentials', label: 'Saved Logins', icon: Key },
+                { id: 'scheduler', label: 'Scheduler', icon: CalendarClock },
+                { id: 'browser', label: 'Browser Integration', icon: ArrowLeftRight },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setFocusedPane('sidebar');
+                    }}
+                    className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md font-medium text-left transition-all duration-100 cursor-pointer focus:outline-none ${
+                      isActive
+                        ? focusedPane === 'sidebar'
+                          ? 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs ring-1 ring-rilo-accent/50'
+                          : 'bg-rilo-selected text-rilo-primary border-l-2 border-rilo-accent font-semibold shadow-xs opacity-90'
+                        : 'text-rilo-secondary border-l-2 border-transparent hover:text-rilo-primary hover:bg-rilo-elevated'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 flex-shrink-0 transition-colors ${isActive ? 'text-rilo-accent' : 'text-rilo-muted'}`} />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
             </nav>
           </aside>
 
           {/* Main Scrollable Content */}
-          <main className="flex-1 p-5 overflow-y-auto custom-scrollbar bg-rilo-bg">
+          <main ref={contentRef as any} className="flex-1 h-full min-h-0 p-5 overflow-y-auto custom-scrollbar bg-rilo-bg">
             {/* TAB 1: APPEARANCE */}
             {activeTab === 'appearance' && (
               <div>
                 <SettingsGroup>
-                  <SettingRow label="Theme" tooltip="Select appearance preference">
+                  <SettingRow label="Theme" tooltip="Choose Light, Dark, or follow your system's appearance automatically.">
                     <Select
                       value={config.appearance.mode || 'system'}
                       onChange={(e) => {
@@ -471,7 +643,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </SettingRow>
 
                   {(currentMode === 'system' || effectiveMode === 'dark') && (
-                    <SettingRow label="Default Dark Theme" tooltip="Theme used when application is in dark mode">
+                    <SettingRow label="Default Dark Theme" tooltip="Select the dark theme variant (only applies when Theme = Dark).">
                       <Select
                         value={config.appearance.default_dark_theme || config.appearance.theme || 'rilo-default'}
                         onChange={(e) => {
@@ -497,7 +669,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   )}
 
                   {(currentMode === 'system' || effectiveMode === 'light') && (
-                    <SettingRow label="Default Light Theme" tooltip="Theme used when application is in light mode">
+                    <SettingRow label="Default Light Theme" tooltip="Select the light theme variant (only applies when Theme = Light).">
                       <Select
                         value={config.appearance.default_light_theme || 'github-light'}
                         onChange={(e) => {
@@ -524,7 +696,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </SettingsGroup>
 
                 <SettingsGroup>
-                  <SettingRow label="Language">
+                  <SettingRow label="Language" tooltip="Change the display language of the interface.">
                     <Select
                       value={config.appearance.language || 'system'}
                       onChange={(e) => {
@@ -540,7 +712,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Font" tooltip="Application typography family">
+                  <SettingRow label="Font" tooltip="Select the font used throughout the application.">
                     <Select
                       value={config.appearance.font_family || 'System'}
                       onChange={(e) => {
@@ -562,7 +734,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="UI Scale" tooltip="Overall scale factor">
+                  <SettingRow label="UI Scale" tooltip="Adjust the size of UI elements and text.">
                     <Select
                       value={config.appearance.ui_scale || 'system'}
                       onChange={(e) => {
@@ -579,12 +751,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <option value="100%">100%</option>
                       <option value="110%">110%</option>
                       <option value="125%">125%</option>
+                      <option value="150%">150%</option>
+                      <option value="175%">175%</option>
+                      <option value="200%">200%</option>
                     </Select>
                   </SettingRow>
                 </SettingsGroup>
 
                 <SettingsGroup>
-                  <SettingRow label="Compact Top Bar" subtext={config.appearance.compact_top_bar !== false ? 'Enabled' : 'Disabled'} tooltip="Reduce title bar height">
+                  <SettingRow label="Compact Top Bar" subtext={config.appearance.compact_top_bar !== false ? 'Enabled' : 'Disabled'} tooltip="Reduce the height of the top toolbar for a more minimal look.">
                     <SwitchToggle
                       checked={config.appearance.compact_top_bar !== false}
                       onChange={(val) =>
@@ -596,7 +771,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Show Icon Labels" subtext={config.appearance.show_icon_labels !== false ? 'Enabled' : 'Disabled'} tooltip="Display subtext under toolbar icons">
+                  <SettingRow label="Show Icon Labels" subtext={config.appearance.show_icon_labels !== false ? 'Enabled' : 'Disabled'} tooltip="Show or hide text labels next to toolbar icons.">
                     <SwitchToggle
                       checked={config.appearance.show_icon_labels !== false}
                       onChange={(val) =>
@@ -608,7 +783,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Use relative date/time" subtext={config.appearance.use_relative_date_time !== false ? 'Enabled' : 'Disabled'} tooltip="Show relative timestamps (e.g. 2 hours ago)">
+                  <SettingRow label="Use relative date/time" subtext={config.appearance.use_relative_date_time !== false ? 'Enabled' : 'Disabled'} tooltip="Display dates and times relative to now (e.g., '2 hours ago') instead of absolute.">
                     <SwitchToggle
                       checked={config.appearance.use_relative_date_time !== false}
                       onChange={(val) =>
@@ -622,7 +797,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </SettingsGroup>
 
                 <SettingsGroup>
-                  <SettingRow label="Start On Boot" subtext={config.appearance.start_on_boot !== false ? 'Enabled' : 'Disabled'} tooltip="Launch Rilo automatically on system startup">
+                  <SettingRow label="Start On Boot" subtext={config.appearance.start_on_boot !== false ? 'Enabled' : 'Disabled'} tooltip="Launch Rilo automatically when your computer starts.">
                     <SwitchToggle
                       checked={config.appearance.start_on_boot !== false}
                       onChange={(val) =>
@@ -634,7 +809,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Use System Tray" subtext={config.appearance.use_system_tray !== false ? 'Enabled' : 'Disabled'} tooltip="Minimize to notification area">
+                  <SettingRow label="Use System Tray" subtext={config.appearance.use_system_tray !== false ? 'Enabled' : 'Disabled'} tooltip="Keep Rilo running in the system tray when the window is closed.">
                     <SwitchToggle
                       checked={config.appearance.use_system_tray !== false}
                       onChange={(val) =>
@@ -653,7 +828,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === 'downloads' && (
               <div className="space-y-4">
                 <SettingsGroup>
-                  <SettingRow label="Default Download Folder" tooltip="Target directory for downloaded files">
+                  <SettingRow label="Default Download Folder" tooltip="The folder where downloads will be saved by default.">
                     <div className="flex items-center space-x-2">
                       <Input
                         value={config.download.download_directory}
@@ -676,11 +851,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </div>
                   </SettingRow>
 
-                  <div className="py-3">
+                  <div className="py-1">
                     <SettingRow
                       label="Use Category By Default"
                       subtext={config.download.use_category_by_default ? 'Enabled' : 'Disabled'}
-                      tooltip="Automatically sort downloaded files into category subfolders based on extension"
+                      tooltip="Automatically organize downloads into subfolders based on file type (Compressed, Programs, Videos, etc.) when enabled."
                     >
                       <SwitchToggle
                         checked={!!config.download.use_category_by_default}
@@ -692,27 +867,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         }
                       />
                     </SettingRow>
-                    <p className="text-[11px] text-rilo-muted mt-1 leading-normal">
-                      Automatically organize downloads into <span className="font-medium text-rilo-primary">Compressed</span>, <span className="font-medium text-rilo-primary">Programs</span>, <span className="font-medium text-rilo-primary">Videos</span>, <span className="font-medium text-rilo-primary">Music</span>, <span className="font-medium text-rilo-primary">Pictures</span>, <span className="font-medium text-rilo-primary">Documents</span>, and <span className="font-medium text-rilo-primary">Other</span> subfolders.
+                    <p className="text-[11px] text-rilo-muted mt-0.5 mb-2 leading-normal break-words">
+                      Automatically organize categorized downloads inside a dedicated <span className="font-semibold text-rilo-accent">Rilo</span> folder into <span className="font-medium text-rilo-primary">Compressed</span>, <span className="font-medium text-rilo-primary">Programs</span>, <span className="font-medium text-rilo-primary">Videos</span>, <span className="font-medium text-rilo-primary">Music</span>, <span className="font-medium text-rilo-primary">Pictures</span>, <span className="font-medium text-rilo-primary">Documents</span>, and <span className="font-medium text-rilo-primary">Other</span> subfolders.
                     </p>
                     {config.download.use_category_by_default && (
-                      <div className="mt-2.5 p-3 bg-rilo-surface/80 border border-rilo-subtle rounded-lg text-[11px] font-mono text-rilo-muted leading-relaxed select-text">
+                      <div className="mt-2 p-3 bg-rilo-surface/80 border border-rilo-subtle rounded-lg text-[11px] font-mono text-rilo-muted leading-relaxed select-text overflow-hidden">
                         <div className="font-semibold text-rilo-accent text-xs mb-1">Download folder structure:</div>
-                        <div>{config.download.download_directory || 'Downloads'}/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Compressed/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Documents/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Music/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Pictures/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Programs/</div>
-                        <div className="pl-3 text-rilo-secondary">├── 📁 Videos/</div>
-                        <div className="pl-3 text-rilo-secondary">└── 📁 Other/</div>
+                        <div className="truncate">{config.download.download_directory || 'Downloads'}/</div>
+                        <div className="pl-3 text-rilo-primary font-semibold">└── 📁 Rilo/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Compressed/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Documents/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Music/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Pictures/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Programs/</div>
+                        <div className="pl-6 text-rilo-secondary">├── 📁 Videos/</div>
+                        <div className="pl-6 text-rilo-secondary">└── 📁 Other/</div>
                       </div>
                     )}
                   </div>
                 </SettingsGroup>
 
                 <SettingsGroup>
-                  <SettingRow label="Global Speed Limiter" tooltip="0 = Unlimited KB/s">
+                  <SettingRow label="Global Speed Limiter" tooltip="Limit the overall download speed across all active downloads. Enter 0 for unlimited.">
                     <div className="flex items-center space-x-1.5 justify-end w-36">
                       <Input
                         type="number"
@@ -732,7 +908,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </div>
                   </SettingRow>
 
-                  <SettingRow label="Thread Count" subtext={`A download can have up to ${config.download.max_connections_per_download} threads`}>
+                  <SettingRow label="Thread Count" subtext={`A download can have up to ${config.download.max_connections_per_download} threads`} tooltip="Maximum number of concurrent connections (segments) per download.">
                     <Select
                       value={config.download.max_connections_per_download.toString()}
                       onChange={(e) =>
@@ -740,7 +916,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           ...config,
                           download: {
                             ...config.download,
-                            max_connections_per_download: parseInt((e.target as HTMLSelectElement).value, 10) || 4,
+                            max_connections_per_download: parseInt((e.target as HTMLSelectElement).value, 10) || 8,
                           },
                         })
                       }
@@ -754,7 +930,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Maximum Concurrent Downloads">
+                  <SettingRow label="Maximum Concurrent Downloads" tooltip="How many downloads can run simultaneously.">
                     <Select
                       value={config.download.max_concurrent_downloads.toString()}
                       onChange={(e) =>
@@ -776,7 +952,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Maximum Download Retries" subtext={`Failed downloads will be retried ${config.download.retry_count} time(s)`}>
+                  <SettingRow label="Maximum Download Retries" subtext={`Failed downloads will be retried ${config.download.retry_count} time(s)`} tooltip="Number of times to retry a failed download before giving up.">
                     <Select
                       value={config.download.retry_count.toString()}
                       onChange={(e) =>
@@ -798,7 +974,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Connection Timeout" subtext="HTTP connect timeout in seconds" tooltip="Default: 30 seconds">
+                  <SettingRow label="Connection Timeout" subtext="HTTP connect timeout in seconds" tooltip="Seconds to wait before timing out a connection attempt.">
                     <Select
                       value={(config.download.connection_timeout_seconds || 30).toString()}
                       onChange={(e) =>
@@ -820,7 +996,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Pre-Check Disk Free Space" subtext={config.download.check_disk_space !== false ? 'Enabled' : 'Disabled'} tooltip="Verify target drive has sufficient free space before downloading">
+                  <SettingRow label="Pre-Check Disk Free Space" subtext={config.download.check_disk_space !== false ? 'Enabled' : 'Disabled'} tooltip="Check available disk space before starting a download to prevent incomplete writes.">
                     <SwitchToggle
                       checked={config.download.check_disk_space !== false}
                       onChange={(val) =>
@@ -832,7 +1008,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Append '.part' Extension To Incomplete Downloads" subtext={config.download.append_extension_incomplete ? 'Enabled' : 'Disabled'}>
+                  <SettingRow label="Append '.part' Extension To Incomplete Downloads" subtext={config.download.append_extension_incomplete ? 'Enabled' : 'Disabled'} tooltip="Add .part to incomplete download filenames to distinguish them from finished files.">
                     <SwitchToggle
                       checked={!!config.download.append_extension_incomplete}
                       onChange={(val) =>
@@ -844,13 +1020,47 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Ignore SSL Certificate Errors" subtext={config.download.ignore_ssl_certificates ? 'Enabled' : 'Disabled'} tooltip="Allow self-signed or invalid HTTPS certificates">
+                  <SettingRow label="Ignore SSL Certificate Errors" subtext={config.download.ignore_ssl_certificates ? 'Enabled' : 'Disabled'} tooltip="Bypass SSL certificate validation (use only if you trust the source).">
                     <SwitchToggle
                       checked={!!config.download.ignore_ssl_certificates}
                       onChange={(val) =>
                         setConfig({
                           ...config,
                           download: { ...config.download, ignore_ssl_certificates: val },
+                        })
+                      }
+                    />
+                  </SettingRow>
+                </SettingsGroup>
+
+                <SettingsGroup>
+                  <SettingRow
+                    label="Auto Extract Archives By Default"
+                    subtext={config.download.auto_extract_archives ? 'Enabled' : 'Disabled'}
+                    tooltip="Automatically extract ZIP and archive files after download completion."
+                  >
+                    <SwitchToggle
+                      checked={!!config.download.auto_extract_archives}
+                      onChange={(val) =>
+                        setConfig({
+                          ...config,
+                          download: { ...config.download, auto_extract_archives: val },
+                        })
+                      }
+                    />
+                  </SettingRow>
+
+                  <SettingRow
+                    label="Delete Archive After Extraction By Default"
+                    subtext={config.download.delete_archive_after_extraction ? 'Enabled' : 'Disabled'}
+                    tooltip="Delete the original downloaded archive file after extracting its contents successfully."
+                  >
+                    <SwitchToggle
+                      checked={!!config.download.delete_archive_after_extraction}
+                      onChange={(val) =>
+                        setConfig({
+                          ...config,
+                          download: { ...config.download, delete_archive_after_extraction: val },
                         })
                       }
                     />
@@ -863,7 +1073,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === 'proxy' && (
               <div>
                 <SettingsGroup>
-                  <SettingRow label="Proxy Mode" tooltip="Select how HTTP/HTTPS requests are routed">
+                  <SettingRow label="Proxy Mode" tooltip="Choose how the proxy is configured: System (use OS proxy), Manual, or None.">
                     <Select
                       value={config.download.proxy.mode || 'system'}
                       onChange={(e) =>
@@ -885,7 +1095,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   {config.download.proxy.mode === 'manual' && (
                     <>
-                      <SettingRow label="HTTP Proxy URL" subtext="e.g. http://127.0.0.1:8080">
+                      <SettingRow label="HTTP Proxy URL" subtext="e.g. http://127.0.0.1:8080" tooltip="The address of the proxy server (e.g., http://proxy.example.com:8080).">
                         <Input
                           value={config.download.proxy.http_proxy || ''}
                           placeholder="http://127.0.0.1:8080"
@@ -902,7 +1112,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         />
                       </SettingRow>
 
-                      <SettingRow label="Proxy Username" subtext="Optional Basic Auth user">
+                      <SettingRow label="Proxy Username" subtext="Optional Basic Auth user" tooltip="Username for proxy authentication (if required).">
                         <Input
                           value={config.download.proxy.username || ''}
                           onChange={(e) =>
@@ -918,7 +1128,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         />
                       </SettingRow>
 
-                      <SettingRow label="Proxy Password" subtext="Optional Basic Auth password">
+                      <SettingRow label="Proxy Password" subtext="Optional Basic Auth password" tooltip="Password for proxy authentication.">
                         <Input
                           type="password"
                           value={config.download.proxy.password || ''}
@@ -935,7 +1145,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         />
                       </SettingRow>
 
-                      <SettingRow label="Test Proxy Connection">
+                      <SettingRow label="Test Proxy Connection" tooltip="Check if the proxy configuration is working.">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -995,12 +1205,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         className="text-xs"
                       />
                     </div>
-                    <div className="flex items-center justify-end space-x-2 pt-2">
+                    <div className="flex justify-end space-x-2 pt-2">
                       <Button variant="secondary" size="sm" onClick={() => setShowAddCredModal(false)}>
                         Cancel
                       </Button>
-                      <Button variant="default" size="sm" onClick={handleSaveCred}>
-                        Save Credential
+                      <Button variant="default" size="sm" onClick={handleSaveCred} disabled={!credDomain || !credUser || !credPass}>
+                        Save Login
                       </Button>
                     </div>
                   </div>
@@ -1032,7 +1242,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === 'scheduler' && (
               <div>
                 <SettingsGroup>
-                  <SettingRow label="Enable Schedule" subtext={config.scheduler.schedule_enabled ? 'Active' : 'Disabled'}>
+                  <SettingRow label="Enable Schedule" subtext={config.scheduler.schedule_enabled ? 'Active' : 'Disabled'} tooltip="Turn on scheduled download time windows.">
                     <SwitchToggle
                       checked={config.scheduler.schedule_enabled}
                       onChange={(val) =>
@@ -1044,7 +1254,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Start Time (HH:MM)" subtext="Format 24h (e.g. 22:00)">
+                  <SettingRow label="Start Time (HH:MM)" subtext="Format 24h (e.g. 22:00)" tooltip="When the download window begins (24‑hour format).">
                     <Input
                       value={config.scheduler.start_time}
                       onChange={(e) =>
@@ -1057,7 +1267,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Stop Time (HH:MM)" subtext="Format 24h (e.g. 06:00)">
+                  <SettingRow label="Stop Time (HH:MM)" subtext="Format 24h (e.g. 06:00)" tooltip="When the download window ends (24‑hour format).">
                     <Input
                       value={config.scheduler.stop_time}
                       onChange={(e) =>
@@ -1070,7 +1280,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Active Scheduled Days" tooltip="Select days when scheduled downloads run">
+                  <SettingRow label="Active Scheduled Days" tooltip="Select which days of the week the schedule applies.">
                     <div className="flex items-center space-x-1.5">
                       {daysList.map((day) => {
                         const active = (config.scheduler.active_days || []).includes(day.id);
@@ -1101,7 +1311,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </div>
                   </SettingRow>
 
-                  <SettingRow label="Post-Download Action" tooltip="Action executed after queue finishes">
+                  <SettingRow label="Post-Download Action" tooltip="What to do after all downloads finish: Nothing, Notify, Sleep, Shutdown, Hibernate, or Run a Custom Command.">
                     <Select
                       value={config.scheduler.post_download_action || 'none'}
                       onChange={(e) =>
@@ -1122,7 +1332,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </SettingRow>
 
                   {config.scheduler.post_download_action === 'command' && (
-                    <SettingRow label="Custom Executable Command" subtext="e.g. C:\scripts\notify.bat">
+                    <SettingRow label="Custom Executable Command" subtext="e.g. C:\scripts\notify.bat" tooltip="Path to a script or executable to run after all downloads complete.">
                       <Input
                         value={config.scheduler.custom_command || ''}
                         placeholder="C:\path\to\script.exe"
@@ -1144,7 +1354,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {activeTab === 'browser' && (
               <div>
                 <SettingsGroup>
-                  <SettingRow label="Browser Integration" subtext={config.browser?.enabled !== false ? 'Enabled' : 'Disabled'}>
+                  <SettingRow label="Browser Integration" subtext={config.browser?.enabled !== false ? 'Enabled' : 'Disabled'} tooltip="Start the local IPC server to accept links from the browser extension.">
                     <SwitchToggle
                       checked={config.browser?.enabled !== false}
                       onChange={(val) =>
@@ -1156,7 +1366,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="Server Port" subtext={`App will listen to port ${config.browser?.port || 15151}`}>
+                  <SettingRow label="Server Port" subtext={`App will listen to port ${config.browser?.port || 15151}`} tooltip="The port used for communication with the browser extension (15151–15153).">
                     <Select
                       value={(config.browser?.port || 15151).toString()}
                       onChange={(e) =>
@@ -1176,7 +1386,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </Select>
                   </SettingRow>
 
-                  <SettingRow label="Use API Key" subtext={config.browser?.use_api_key ? 'Enabled' : 'Disabled'}>
+                  <SettingRow label="Use API Key" subtext={config.browser?.use_api_key ? 'Enabled' : 'Disabled'} tooltip="Enable or disable API key authentication for the extension.">
                     <SwitchToggle
                       checked={!!config.browser?.use_api_key}
                       onChange={(val) =>
@@ -1188,7 +1398,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </SettingRow>
 
-                  <SettingRow label="API Key" subtext={config.browser?.use_api_key ? 'Enabled' : 'Disabled'}>
+                  <SettingRow label="API Key" subtext={config.browser?.use_api_key ? 'Enabled' : 'Disabled'} tooltip="The secret key that the browser extension must provide to connect.">
                     <Input
                       value={config.browser?.api_key || 'VNrFjwyVENqcnGnBCVtiYjw1'}
                       onChange={(e) =>

@@ -2,42 +2,119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rilo Download Manager</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div className="popup-container">
+  <div class="popup-container">
     <!-- Header -->
-      <img src="../icons/icon32.png" alt="Rilo Logo" class="rilo-logo-img" />
-      <div className="rilo-brand">
-        <h1 className="rilo-name">Rilo</h1>
-        <span className="rilo-sub">Download Manager</span>
+    <header class="popup-header">
+      <div class="brand-left">
+        <div class="logo-wrapper">
+          <img src="../icons/icon48.png" alt="Rilo Logo" class="rilo-logo-img" />
+        </div>
+        <div class="rilo-brand">
+          <div class="brand-title-row">
+            <h1 class="rilo-name">Rilo</h1>
+            <span class="version-badge">v1.1.0</span>
+          </div>
+          <span class="rilo-sub">Desktop Download Manager</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="open-app-btn" class="icon-btn" title="Open Rilo Desktop">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </button>
+        <button id="settings-btn" class="icon-btn" title="Extension Preferences">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Status & Primary Toggle Card -->
+    <div class="card status-card">
+      <div class="status-row">
+        <div class="status-indicator">
+          <span id="connection-dot" class="dot offline"></span>
+          <span id="connection-text" class="status-text">Checking connection...</span>
+        </div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <div class="toggle-row">
+        <div class="toggle-label-group">
+          <span class="toggle-title">Auto-Catch Downloads</span>
+          <span id="status-desc" class="toggle-desc">Catching browser links</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="catch-links-toggle" checked />
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
 
-    <div className="popup-divider"></div>
-
-    <!-- Catch Links Primary Toggle -->
-    <div className="toggle-section">
-      <div className="toggle-label-group">
-        <span className="toggle-title">Catch Links</span>
-        <span id="status-desc" className="toggle-desc">Catching supported downloads</span>
-      </div>
-      <label className="switch">
-        <input type="checkbox" id="catch-links-toggle" checked />
-        <span className="slider"></span>
-      </label>
+    <!-- Quick Add Download Bar -->
+    <div class="card quick-add-card">
+      <form id="quick-download-form" class="quick-form">
+        <input
+          type="url"
+          id="url-input"
+          class="url-input"
+          placeholder="Paste download URL..."
+          required
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="submit" id="send-btn" class="send-btn" title="Send to Rilo">
+          <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </form>
+      <div id="quick-feedback" class="quick-feedback"></div>
     </div>
 
-    <div className="popup-divider"></div>
+    <!-- Recent Downloads Section -->
+    <div class="recent-section">
+      <div class="section-header">
+        <span class="section-title">Recent Downloads</span>
+        <button id="clear-recents-btn" class="clear-btn" title="Clear list">Clear</button>
+      </div>
 
-    <!-- Status Footer -->
-    <div className="popup-footer">
-      <div className="status-indicator">
-        <span id="connection-dot" className="dot online">●</span>
-        <span id="connection-text" className="status-text">Rilo connected</span>
+      <div id="recents-list" class="recents-list">
+        <!-- Rendered dynamically -->
       </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <div class="footer-left">
+        <button id="download-page-btn" class="footer-link-btn" title="Download all media on this page">
+          <svg class="svg-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <span>Catch Page Media</span>
+        </button>
+      </div>
+      <div class="footer-right">
+        <button id="footer-pref-btn" class="footer-link-btn">Preferences</button>
+      </div>
+    </footer>
   </div>
 
   <script src="popup.js"></script>

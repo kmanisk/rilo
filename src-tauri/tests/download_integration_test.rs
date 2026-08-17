@@ -1,4 +1,4 @@
-use dlman_core::DlmanCore;
+use dlengine::DlmanCore;
 use dlman_types::DownloadStatus;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -528,7 +528,7 @@ async fn test_fresh_database_initialization_succeeds() {
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("fresh_downloads.db");
     
-    let db = dlman_core::DownloadDatabase::new(&db_path).await;
+    let db = dlengine::DownloadDatabase::new(&db_path).await;
     assert!(db.is_ok(), "Fresh database initialization failed: {:?}", db.err());
 }
 
@@ -588,7 +588,7 @@ async fn test_legacy_rilo_database_migration_succeeds() {
     pool.close().await;
 
     // Run DLMan database initialization on legacy DB
-    let db = dlman_core::DownloadDatabase::new(&db_path).await.expect("Legacy migration failed");
+    let db = dlengine::DownloadDatabase::new(&db_path).await.expect("Legacy migration failed");
 
     // Verify queue_id exists and legacy download was migrated
     let loaded = db.load_download(uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()).await.unwrap();
@@ -657,6 +657,7 @@ async fn test_download_manager_start_download_end_to_end() {
             None,
             Some(4),
             false,
+            true,
         )
         .await
         .unwrap();
@@ -712,6 +713,7 @@ async fn test_real_external_download_hetzner() {
             None,
             Some(4),
             false,
+            true,
         )
         .await;
 
@@ -757,6 +759,7 @@ async fn test_requested_segment_counts_8_and_16() {
             None,
             Some(8),
             false,
+            true,
         )
         .await
         .unwrap();
@@ -783,6 +786,7 @@ async fn test_requested_segment_counts_8_and_16() {
             None,
             Some(16),
             false,
+            true,
         )
         .await
         .unwrap();
@@ -816,9 +820,9 @@ async fn test_three_concurrent_downloads_and_failure_isolation() {
     let manager = downloader_lib::download::manager::DownloadManager::new(db, config, config_path, data_dir).await;
 
     // Start 3 downloads simultaneously: 2 valid, 1 invalid (404)
-    let rec1 = manager.start_download(None, format!("{}/small.bin?dl=1", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false).await.unwrap();
-    let rec2 = manager.start_download(None, format!("{}/small.bin?dl=2", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false).await.unwrap();
-    let rec_fail = manager.start_download(None, format!("{}/404.bin", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false).await.unwrap();
+    let rec1 = manager.start_download(None, format!("{}/small.bin?dl=1", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false, true).await.unwrap();
+    let rec2 = manager.start_download(None, format!("{}/small.bin?dl=2", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false, true).await.unwrap();
+    let rec_fail = manager.start_download(None, format!("{}/404.bin", server.addr), Some(save_dir.to_string_lossy().to_string()), None, Some(4), false, true).await.unwrap();
 
     let id1 = uuid::Uuid::parse_str(&rec1.id).unwrap();
     let id2 = uuid::Uuid::parse_str(&rec2.id).unwrap();
@@ -1178,6 +1182,7 @@ async fn test_two_minute_disk_test_hetzner_trace() {
             None,
             Some(4),
             false,
+            true,
         )
         .await;
 
@@ -1325,6 +1330,107 @@ async fn test_segment_zero_based_indexing_integrity() {
     for i in 1..d.segments.len() {
         assert_eq!(d.segments[i].start, d.segments[i - 1].end + 1);
     }
+}
+
+#[tokio::test]
+async fn test_duplicate_download_detection_blocks_second_download_unless_forced() {
+    let server = TestHttpServer::start().await;
+    let url = format!("{}/large_dup.bin", server.addr);
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads_dup");
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    // 1. First submission should succeed
+    let d1 = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, false).await.unwrap();
+    
+    // 2. Second submission without allow_duplicate must be BLOCKED
+    let second_res = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, false).await;
+    assert!(second_res.is_err(), "Second download with identical URL must return Err");
+    match second_res.unwrap_err() {
+        dlengine::DlmanError::DuplicateDownload { id, filename, .. } => {
+            assert_eq!(id, d1.id);
+            assert_eq!(filename, d1.filename);
+        }
+        dlengine::DlmanError::AlreadyExists(id) => {
+            assert_eq!(id, d1.id);
+        }
+        other => panic!("Expected DuplicateDownload error variant, got: {:?}", other),
+    }
+
+    // Verify exactly one download exists in database
+    let all_downloads = core.get_all_downloads().await.unwrap();
+    assert_eq!(all_downloads.len(), 1, "Exactly one download must exist when duplicate is blocked");
+
+    // 3. Third submission WITH allow_duplicate=true must SUCCEED as independent download
+    let d2 = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, true).await.unwrap();
+    assert_ne!(d1.id, d2.id, "Second copy must have its own unique UUID");
+    assert_ne!(d1.filename, d2.filename, "Second copy must have disambiguated filename");
+
+    let all_downloads_after = core.get_all_downloads().await.unwrap();
+    assert_eq!(all_downloads_after.len(), 2, "Both downloads must exist when forced");
+
+    // Wait for both to complete
+    let completed1 = wait_for_status(&core, d1.id, DownloadStatus::Completed, 30).await;
+    let completed2 = wait_for_status(&core, d2.id, DownloadStatus::Completed, 30).await;
+    assert!(completed1 && completed2, "Both downloads must complete successfully");
+}
+
+#[tokio::test]
+async fn test_duplicate_download_detection_ignores_different_query_params() {
+    let server = TestHttpServer::start().await;
+    let url_token1 = format!("{}/large.bin?token=alpha", server.addr);
+    let url_token2 = format!("{}/large.bin?token=beta", server.addr);
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads_tokens");
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    // Both with allow_duplicate=false should succeed because URLs have different query tokens
+    let d1 = core.add_download_with_options(&url_token1, save_dir.clone(), Uuid::nil(), None, None, true, false).await.unwrap();
+    let d2 = core.add_download_with_options(&url_token2, save_dir.clone(), Uuid::nil(), None, None, true, false).await.unwrap();
+
+    assert_ne!(d1.id, d2.id);
+    let all = core.get_all_downloads().await.unwrap();
+    assert_eq!(all.len(), 2, "Different query tokens must not block each other");
+}
+
+#[tokio::test]
+async fn test_completed_download_with_deleted_file_allows_fresh_download() {
+    let server = TestHttpServer::start().await;
+    let url = format!("{}/large_del.bin", server.addr);
+
+    let temp_dir = tempfile::tempdir().unwrap();
+    let data_dir = temp_dir.path().to_path_buf();
+    let save_dir = temp_dir.path().join("downloads_del");
+    std::fs::create_dir_all(&save_dir).unwrap();
+
+    let core = DlmanCore::new(data_dir.clone()).await.unwrap();
+
+    let d1 = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, false).await.unwrap();
+    let completed = wait_for_status(&core, d1.id, DownloadStatus::Completed, 30).await;
+    assert!(completed, "Initial download failed to complete");
+
+    let final_file = save_dir.join(&core.get_download(d1.id).await.unwrap().filename);
+    assert!(final_file.exists(), "Completed file must exist");
+
+    // Attempting duplicate while file exists on disk must be BLOCKED
+    let blocked = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, false).await;
+    assert!(blocked.is_err(), "Duplicate with existing file on disk must be blocked");
+
+    // Delete the file from disk (user deleted the downloaded file)
+    std::fs::remove_file(&final_file).unwrap();
+    assert!(!final_file.exists(), "File should be deleted");
+
+    // Fresh download for the same URL must now SUCCEED because file is gone from disk
+    let d2 = core.add_download_with_options(&url, save_dir.clone(), Uuid::nil(), None, None, true, false).await;
+    assert!(d2.is_ok(), "Deleted completed file must not block a fresh re-download: {:?}", d2.err());
 }
 
 

@@ -1,9 +1,10 @@
 use crate::config::AppConfig;
 use crate::db::Database;
-use crate::models::{DownloadProgressPayload, DownloadRecord};
-use dlman_core::DlmanCore;
+use crate::models::{DownloadProgressPayload, DownloadRecord, DuplicateDownloadInfo};
+use dlengine::DlmanCore;
 use dlman_types::{CoreEvent, Download, DownloadStatus};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
@@ -248,6 +249,69 @@ impl DownloadManager {
                                     let action = crate::core::post_action::PostDownloadAction::parse(&action_str, &custom_cmd);
                                     action.execute();
                                 }
+
+                                // Auto-extract post-download hook (non-blocking task)
+                                let id_str = id.to_string();
+                                let is_auto_extract = match db.get_setting(&format!("extract_auto_{}", id_str)).await {
+                                    Ok(Some(val)) => val == "true",
+                                    _ => match db.get_setting("auto_extract_archives").await {
+                                        Ok(Some(val)) => val == "true",
+                                        _ => false,
+                                    },
+                                };
+
+                                if is_auto_extract {
+                                    let custom_extract_dir = db.get_setting(&format!("extract_dir_{}", id_str)).await.ok().flatten();
+                                    let delete_after = match db.get_setting(&format!("extract_delete_{}", id_str)).await {
+                                        Ok(Some(val)) => val == "true",
+                                        _ => match db.get_setting("delete_archive_after_extraction").await {
+                                            Ok(Some(val)) => val == "true",
+                                            _ => false,
+                                        },
+                                    };
+
+                                    let archive_path = d.destination.join(&d.filename);
+                                    let dest_dir = if let Some(dir) = custom_extract_dir.filter(|dir| !dir.trim().is_empty()) {
+                                        PathBuf::from(dir)
+                                    } else {
+                                        d.destination.clone()
+                                    };
+
+                                    let app_clone = app_handle.clone();
+                                    tokio::task::spawn_blocking(move || {
+                                        let cancel_flag = Arc::new(AtomicBool::new(false));
+                                        let opts = crate::core::archive::ExtractionOptions {
+                                            archive_path: archive_path.clone(),
+                                            dest_dir: dest_dir.clone(),
+                                            password: None,
+                                            delete_after,
+                                        };
+
+                                        let res = crate::core::archive::extract_archive(
+                                            app_clone.clone(),
+                                            id_str.clone(),
+                                            opts,
+                                            cancel_flag,
+                                        );
+
+                                        match res {
+                                            Ok(()) => {
+                                                let _ = app_clone.emit("rilo-extract-completed", serde_json::json!({
+                                                    "download_id": id_str,
+                                                    "status": "completed",
+                                                    "message": "Archive extracted successfully",
+                                                }));
+                                            }
+                                            Err(e) => {
+                                                let _ = app_clone.emit("rilo-extract-completed", serde_json::json!({
+                                                    "download_id": id_str,
+                                                    "status": "failed",
+                                                    "message": format!("Extraction failed: {}", e),
+                                                }));
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
@@ -340,6 +404,47 @@ impl DownloadManager {
         });
     }
 
+    pub async fn check_duplicate(&self, url: &str) -> Result<Option<DuplicateDownloadInfo>, String> {
+        let downloads = self.core.get_all_downloads().await.map_err(|e| e.to_string())?;
+        for d in downloads {
+            if d.url == url {
+                let (status_str, file_exists) = match d.status {
+                    DownloadStatus::Downloading => ("downloading", true),
+                    DownloadStatus::Paused => ("paused", true),
+                    DownloadStatus::Queued => ("queued", true),
+                    DownloadStatus::Completed => {
+                        let file_path = d.destination.join(&d.filename);
+                        if file_path.exists() {
+                            ("completed", true)
+                        } else {
+                            continue; // File deleted from disk, not a blocking duplicate
+                        }
+                    }
+                    _ => continue, // Failed or Cancelled are not blocking duplicates
+                };
+
+                let save_path = d.destination.join(&d.filename).to_string_lossy().to_string();
+
+                return Ok(Some(DuplicateDownloadInfo {
+                    id: d.id.to_string(),
+                    filename: d.filename,
+                    url: d.url,
+                    status: status_str.to_string(),
+                    save_path,
+                    downloaded_bytes: d.downloaded,
+                    total_bytes: d.size.unwrap_or(0),
+                    file_exists_on_disk: file_exists,
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    pub async fn probe_link(&self, url_str: &str) -> Result<dlman_types::LinkInfo, String> {
+        let parsed = reqwest::Url::parse(url_str).map_err(|e| format!("Invalid URL: {}", e))?;
+        self.core.download_manager.probe_url(&parsed).await.map_err(|e| e.to_string())
+    }
+
     pub async fn start_download(
         &self,
         download_id: Option<String>,
@@ -348,6 +453,7 @@ impl DownloadManager {
         speed_limit: Option<u64>,
         num_connections: Option<u32>,
         is_resume: bool,
+        allow_duplicate: bool,
     ) -> Result<DownloadRecord, String> {
         if is_resume {
             if let Some(ref id_str) = download_id {
@@ -360,6 +466,14 @@ impl DownloadManager {
                         return Ok(download_to_record(&dl));
                     }
                 }
+            }
+        }
+
+        // Duplicate check if this is a fresh download creation and duplicate was not explicitly allowed
+        if !is_resume && !allow_duplicate && download_id.is_none() {
+            if let Some(dup) = self.check_duplicate(&url).await? {
+                let dup_json = serde_json::to_string(&dup).unwrap_or_default();
+                return Err(format!("DUPLICATE:{}", dup_json));
             }
         }
 
@@ -381,12 +495,12 @@ impl DownloadManager {
 
         let use_category = cfg.download.use_category_by_default && custom_path.is_none();
         let temp_download_id = uuid::Uuid::new_v4();
-        let init_resolved = dlman_core::resolve_authoritative_filename(temp_download_id, None, None, &url);
-        let final_save_dir = dlman_core::resolve_final_download_dir(&base_dir, use_category, &init_resolved.resolved_filename);
+        let init_resolved = dlengine::resolve_authoritative_filename(temp_download_id, None, None, &url);
+        let final_save_dir = dlengine::resolve_final_download_dir(&base_dir, use_category, &init_resolved.resolved_filename);
 
         let _ = tokio::fs::create_dir_all(&final_save_dir).await;
 
-        let category_name = if use_category { dlman_core::get_category_folder_name(&init_resolved.resolved_filename) } else { "none" };
+        let category_name = if use_category { dlengine::get_category_folder_name(&init_resolved.resolved_filename) } else { "none" };
         eprintln!(
             "[DOWNLOAD-PATH] url={} filename=\"{}\" category=\"{}\" base_dir={:?} use_category={} final_dir={:?}",
             url, init_resolved.resolved_filename, category_name, base_dir, use_category, final_save_dir
@@ -395,7 +509,7 @@ impl DownloadManager {
         let queue_id = Uuid::nil();
         let download = self
             .core
-            .add_download(&url, final_save_dir, queue_id, None, None, false)
+            .add_download_with_options(&url, final_save_dir, queue_id, None, None, false, allow_duplicate)
             .await
             .map_err(|e| {
                 eprintln!("[ERROR] add_download failed: {}", e);

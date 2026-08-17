@@ -16,7 +16,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer";
+    "inline-flex items-center justify-center rounded-md font-medium transition-all duration-100 ease-out active:scale-[0.97] active:brightness-95 hover:brightness-105 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer";
 
   const variants = {
     default: "rilo-button-primary shadow-sm",

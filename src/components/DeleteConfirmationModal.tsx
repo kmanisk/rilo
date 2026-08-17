@@ -16,7 +16,7 @@ export default function DeleteConfirmationModal({
 }: DeleteConfirmationModalProps) {
   return (
     <div className="fixed inset-0 z-50 bg-rilo-overlay backdrop-blur-xs flex items-center justify-center p-4 select-none font-sans animate-in fade-in duration-150">
-      <div className="bg-rilo-surface border border-rilo-border rounded-xl max-w-md w-full shadow-2xl p-5 space-y-4">
+      <div className="bg-rilo-surface border border-rilo-border rounded-xl max-w-md w-full rilo-modal-shadow p-5 space-y-4">
         <div className="flex items-center space-x-3 border-b border-rilo-border pb-3">
           <div className="w-9 h-9 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
             <AlertTriangle className="w-5 h-5" />

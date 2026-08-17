@@ -7,6 +7,8 @@ pub struct AppConfig {
     pub version: u32,
     pub download: DownloadConfig,
     pub scheduler: SchedulerConfig,
+    #[serde(default)]
+    pub browser: Option<BrowserConfig>,
     pub appearance: AppearanceConfig,
 }
 
@@ -87,8 +89,51 @@ pub struct SchedulerConfig {
     pub custom_command: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 fn default_mode() -> String {
     "system".to_string()
+}
+
+fn default_language() -> String {
+    "system".to_string()
+}
+
+fn default_ui_scale() -> String {
+    "system".to_string()
+}
+
+fn default_browser_port() -> u16 {
+    15151
+}
+
+fn default_browser_api_key() -> String {
+    "VNrFjwyVENqcnGnBCVtiYjw1".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_browser_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub use_api_key: bool,
+    #[serde(default = "default_browser_api_key")]
+    pub api_key: String,
+}
+
+impl Default for BrowserConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 15151,
+            use_api_key: false,
+            api_key: "VNrFjwyVENqcnGnBCVtiYjw1".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +141,38 @@ pub struct AppearanceConfig {
     pub theme: String,
     #[serde(default = "default_mode")]
     pub mode: String,
+    #[serde(default)]
+    pub default_dark_theme: Option<String>,
+    #[serde(default)]
+    pub default_light_theme: Option<String>,
+    #[serde(default = "default_language")]
+    pub language: String,
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale: String,
+    #[serde(default = "default_true")]
+    pub compact_top_bar: bool,
+    #[serde(default = "default_true")]
+    pub show_icon_labels: bool,
+    #[serde(default = "default_true")]
+    pub use_relative_date_time: bool,
+    #[serde(default = "default_true")]
+    pub start_on_boot: bool,
+    #[serde(default = "default_true")]
+    pub use_system_tray: bool,
+    #[serde(default)]
+    pub download_size_unit: Option<String>,
+    #[serde(default)]
+    pub download_speed_unit: Option<String>,
+    #[serde(default)]
+    pub show_average_speed: Option<bool>,
+    #[serde(default)]
+    pub notification_sound: Option<bool>,
+    #[serde(default)]
+    pub show_download_progress_dialog: Option<bool>,
+    #[serde(default)]
+    pub show_download_completion_dialog: Option<bool>,
+    #[serde(default)]
+    pub render_api: Option<String>,
     pub accent_color: String,
     pub font_family: String,
     pub font_size: String,
@@ -109,6 +186,7 @@ impl Default for AppConfig {
             version: 1,
             download: DownloadConfig::default(),
             scheduler: SchedulerConfig::default(),
+            browser: Some(BrowserConfig::default()),
             appearance: AppearanceConfig::default(),
         }
     }
@@ -119,7 +197,7 @@ impl Default for DownloadConfig {
         Self {
             download_directory: String::new(),
             max_concurrent_downloads: 4,
-            max_connections_per_download: 4,
+            max_connections_per_download: 8,
             retry_count: 3,
             retry_delay_seconds: 5,
             connection_timeout_seconds: 30,
@@ -155,6 +233,22 @@ impl Default for AppearanceConfig {
         Self {
             theme: "rilo-default".to_string(),
             mode: "system".to_string(),
+            default_dark_theme: Some("rilo-default".to_string()),
+            default_light_theme: Some("github-light".to_string()),
+            language: "system".to_string(),
+            ui_scale: "system".to_string(),
+            compact_top_bar: true,
+            show_icon_labels: true,
+            use_relative_date_time: true,
+            start_on_boot: true,
+            use_system_tray: true,
+            download_size_unit: None,
+            download_speed_unit: None,
+            show_average_speed: None,
+            notification_sound: None,
+            show_download_progress_dialog: None,
+            show_download_completion_dialog: None,
+            render_api: None,
             accent_color: "indigo".to_string(),
             font_family: "Inter".to_string(),
             font_size: "Default".to_string(),
@@ -312,7 +406,7 @@ mod tests {
 
         assert_eq!(config.version, 1);
         assert_eq!(config.download.max_concurrent_downloads, 4);
-        assert_eq!(config.download.max_connections_per_download, 4);
+        assert_eq!(config.download.max_connections_per_download, 8);
         assert_eq!(config.appearance.theme, "rilo-default");
         assert_eq!(config.appearance.font_family, "Inter");
         assert_eq!(config.appearance.font_size_px, 15);

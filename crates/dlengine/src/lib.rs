@@ -15,6 +15,7 @@
 
 mod engine;
 mod error;
+pub mod extract;
 pub mod media;
 mod queue;
 mod scheduler;
@@ -22,6 +23,7 @@ mod storage;
 
 pub use engine::*;
 pub use error::*;
+pub use extract::*;
 pub use queue::*;
 pub use scheduler::*;
 pub use storage::*;
@@ -219,12 +221,38 @@ impl DlmanCore {
         }
     }
     
-    /// Add a new download.
+    /// Check if a download matching the source URL already exists.
     ///
-    /// When `auto_start` is true the download begins immediately.
-    /// When false, it stays in `Queued` status until the user manually starts it.
-    /// Streaming URLs (m3u8/mpd) are transparently redirected to the HLS/DASH pipeline.
-    pub async fn add_download(
+    /// Matches existing downloads that are currently Downloading, Queued, or Paused.
+    /// For Completed downloads, checks whether the destination file still exists on disk;
+    /// if the file was deleted, it is not treated as a blocking duplicate.
+    /// Exact URL matching ensures different query tokens/parameters are not blocked.
+    pub async fn find_duplicate_download(&self, url: &str) -> Result<Option<Download>, DlmanError> {
+        let all_downloads = self.get_all_downloads().await?;
+        for d in all_downloads {
+            if d.url == url {
+                match d.status {
+                    DownloadStatus::Downloading | DownloadStatus::Queued | DownloadStatus::Paused => {
+                        return Ok(Some(d));
+                    }
+                    DownloadStatus::Completed => {
+                        let file_path = d.destination.join(&d.filename);
+                        if file_path.exists() {
+                            return Ok(Some(d));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Add a new download with explicit duplicate-policy options.
+    ///
+    /// When `allow_duplicate` is false, returns `Err(DlmanError::DuplicateDownload { .. })`
+    /// if an identical active or on-disk completed download exists.
+    pub async fn add_download_with_options(
         &self,
         url: &str,
         destination: PathBuf,
@@ -232,6 +260,7 @@ impl DlmanCore {
         category_id: Option<Uuid>,
         cookies: Option<String>,
         auto_start: bool,
+        allow_duplicate: bool,
     ) -> Result<Download, DlmanError> {
         // Safety net: redirect streaming URLs to the HLS/DASH pipeline.
         if is_streaming_url(url) {
@@ -242,6 +271,16 @@ impl DlmanCore {
         // Validate URL
         let _parsed_url = url::Url::parse(url)
             .map_err(|_| DlmanError::InvalidUrl(url.to_string()))?;
+
+        if !allow_duplicate {
+            if let Some(existing) = self.find_duplicate_download(url).await? {
+                return Err(DlmanError::DuplicateDownload {
+                    id: existing.id,
+                    filename: existing.filename,
+                    status: format!("{:?}", existing.status),
+                });
+            }
+        }
 
         let temp_download_id = uuid::Uuid::new_v4();
         let init_resolved = crate::engine::resolve_authoritative_filename(temp_download_id, None, None, url);
@@ -272,6 +311,19 @@ impl DlmanCore {
         }
 
         Ok(download)
+    }
+
+    /// Add a new download (defaults to allow_duplicate = true for backward compatibility).
+    pub async fn add_download(
+        &self,
+        url: &str,
+        destination: PathBuf,
+        queue_id: Uuid,
+        category_id: Option<Uuid>,
+        cookies: Option<String>,
+        auto_start: bool,
+    ) -> Result<Download, DlmanError> {
+        self.add_download_with_options(url, destination, queue_id, category_id, cookies, auto_start, true).await
     }
 
     /// Convenience alias — adds a download without starting it.

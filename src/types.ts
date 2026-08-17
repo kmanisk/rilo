@@ -97,3 +97,22 @@ export interface DownloadItem {
   extractionState?: "Pending" | "Extracting" | "Extracted" | "ExtractionFailed" | "Cancelled";
   extractionProgress?: ExtractionProgressPayload;
 }
+
+export interface DuplicateDownloadInfo {
+  id: string;
+  filename: string;
+  url: string;
+  status: string;
+  save_path: string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  file_exists_on_disk: boolean;
+}
+
+export interface UrlMetadata {
+  size?: number | null;
+  filename?: string | null;
+  content_type?: string | null;
+  accept_ranges: boolean;
+  resumable: boolean;
+}

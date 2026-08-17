@@ -1,5 +1,5 @@
 //! Download worker adapter module for Rilo.
-//! Download tasks are executed directly by `dlman_core::engine::DownloadTask`.
+//! Download tasks are executed directly by `dlengine::engine::DownloadTask`.
 
 use crate::download::DownloadManager;
 use tauri::AppHandle;
@@ -22,6 +22,7 @@ pub async fn execute_download<R: tauri::Runtime>(
             speed_limit,
             num_connections,
             is_resume,
+            true,
         )
         .await
         .map(|_| ())

@@ -68,7 +68,7 @@ export default function WindowChrome({
   return (
     <div
       data-tauri-drag-region
-      className="bg-rilo-surface border-b border-rilo-border px-3 h-8 flex items-center justify-between select-none flex-shrink-0 font-sans text-xs"
+      className="bg-rilo-surface border-b border-rilo-border pl-3 pr-0 h-8 flex items-center justify-between select-none flex-shrink-0 font-sans text-xs"
     >
       {/* Title & Icon Area (Draggable) */}
       <div data-tauri-drag-region className="flex items-center space-x-2 min-w-0 flex-1 h-full pr-2">
@@ -99,38 +99,38 @@ export default function WindowChrome({
         </div>
       </div>
 
-      {/* Window Controls (Non-draggable buttons) */}
-      <div className="flex items-center space-x-0.5 -mr-1 h-full flex-shrink-0">
+      {/* Window Controls (Flush with Top-Right Corner) */}
+      <div data-tauri-drag-region="false" className="flex items-center h-full flex-shrink-0 mr-0">
         <button
           type="button"
           onClick={handleMinimize}
-          className="w-7 h-6 flex items-center justify-center text-rilo-muted hover:text-rilo-primary hover:bg-rilo-elevated transition-colors rounded-xs cursor-pointer"
+          className="w-10 h-full flex items-center justify-center text-rilo-muted hover:text-rilo-primary hover:bg-rilo-elevated transition-colors cursor-pointer select-none focus:outline-none"
           title="Minimize"
           aria-label="Minimize"
         >
-          <Minus className="w-3 h-3" />
+          <Minus className="w-3.5 h-3.5" />
         </button>
 
         {showMaximize && (
           <button
             type="button"
             onClick={handleToggleMaximize}
-            className="w-7 h-6 flex items-center justify-center text-rilo-muted hover:text-rilo-primary hover:bg-rilo-elevated transition-colors rounded-xs cursor-pointer"
+            className="w-10 h-full flex items-center justify-center text-rilo-muted hover:text-rilo-primary hover:bg-rilo-elevated transition-colors cursor-pointer select-none focus:outline-none"
             title={isMaximized ? "Restore" : "Maximize"}
             aria-label={isMaximized ? "Restore" : "Maximize"}
           >
-            {isMaximized ? <Copy className="w-3 h-3" /> : <Square className="w-2.5 h-2.5" />}
+            {isMaximized ? <Copy className="w-3 h-3" /> : <Square className="w-3 h-3" />}
           </button>
         )}
 
         <button
           type="button"
           onClick={handleClose}
-          className="w-7 h-6 flex items-center justify-center text-rilo-muted hover:text-white hover:bg-rose-600 transition-colors rounded-xs cursor-pointer"
+          className="w-11 h-full flex items-center justify-center text-rilo-muted hover:text-white hover:bg-rose-600 active:bg-rose-700 transition-colors cursor-pointer select-none focus:outline-none"
           title="Close"
           aria-label="Close"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>

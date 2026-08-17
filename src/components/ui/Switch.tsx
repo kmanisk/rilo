@@ -16,15 +16,20 @@ export function Switch({ checked, onChange, className, disabled }: SwitchProps) 
       disabled={disabled}
       onClick={() => !disabled && onChange(!checked)}
       className={cn(
-        "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50",
-        checked ? "bg-rilo-accent" : "bg-rilo-elevated border-rilo-border",
+        "group relative inline-flex items-center w-[38px] h-[22px] min-w-[38px] min-h-[22px] max-w-[38px] max-h-[22px] p-0 flex-shrink-0 cursor-pointer rounded-xs border-2 box-border transition-colors duration-150 ease-out focus:outline-none focus-visible:ring-1 focus-visible:ring-rilo-accent disabled:opacity-40 disabled:cursor-not-allowed select-none overflow-hidden",
+        checked
+          ? "bg-rilo-accent border-rilo-border-strong shadow-xs"
+          : "bg-rilo-elevated border-rilo-border hover:border-rilo-border-strong",
         className
       )}
     >
+      {/* Minecraft-Bedrock Square / Rectangular Knob */}
       <span
         className={cn(
-          "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-          checked ? "translate-x-4" : "translate-x-0"
+          "pointer-events-none inline-block w-[14px] h-[14px] min-w-[14px] min-h-[14px] max-w-[14px] max-h-[14px] box-border rounded-xs border transition-transform duration-150 ease-out",
+          checked
+            ? "translate-x-[18px] bg-white border-black/30 shadow-xs"
+            : "translate-x-[2px] bg-rilo-surface border-rilo-border-strong shadow-2xs"
         )}
       />
     </button>

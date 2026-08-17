@@ -9,16 +9,16 @@ export default function ProgressBar({ percent, status }: ProgressBarProps) {
   const isPaused = status === "paused";
 
   return (
-    <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/80">
+    <div className="w-full h-1 bg-rilo-elevated rounded-full overflow-hidden border border-rilo-border">
       <div
         className={`h-full transition-[width] duration-200 ease-out ${
           isCompleted
-            ? "bg-emerald-500"
+            ? "bg-rilo-success"
             : isError
-            ? "bg-rose-500"
+            ? "bg-rilo-error"
             : isPaused
-            ? "bg-amber-500"
-            : "bg-indigo-500"
+            ? "bg-rilo-warning"
+            : "bg-rilo-accent"
         }`}
         style={{ width: `${percent}%` }}
       />

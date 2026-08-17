@@ -170,6 +170,7 @@ pub fn run() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
+            commands::check_duplicate_download,
             commands::start_download,
             commands::resume_download,
             commands::pause_download,
@@ -202,7 +203,8 @@ pub fn run() {
             commands::get_site_credentials,
             commands::save_site_credential,
             commands::delete_site_credential,
-            commands::test_proxy_connection
+            commands::test_proxy_connection,
+            commands::fetch_url_metadata
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

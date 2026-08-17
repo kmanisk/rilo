@@ -1,3 +1,6 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap");
+@import url("https://cdn.jsdelivr.net/npm/@bm/iosevka@latest/dist/iosevka.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,6 +8,7 @@
 @layer base {
   /* Centralized Production Rilo Design Token & Theme Engine */
   :root {
+    color-scheme: dark;
     --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     --rilo-font-size: 15px;
 
@@ -34,6 +38,8 @@
     --warning: #f59e0b;
     --error: #f43f5e;
     --overlay: rgba(9, 9, 11, 0.72);
+    --modal-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+
     --color-background: var(--background);
     --color-surface: var(--surface);
     --color-surface-elevated: var(--surface-elevated);
@@ -53,6 +59,13 @@
     --color-selection: var(--rilo-accent-muted); --color-selection-foreground: var(--text-primary);
     --color-input-background: var(--surface-elevated); --color-input-border: var(--border); --color-focus-ring: var(--rilo-accent);
 
+    /* Sidebar Navigation Tokens */
+    --sidebar-active-bg: var(--surface-selected);
+    --sidebar-active-text: var(--text-primary);
+    --sidebar-active-border: var(--rilo-accent);
+    --sidebar-hover-bg: var(--surface-hover);
+    --sidebar-hover-text: var(--text-primary);
+
     /* Default Density (Comfortable) */
     --download-card-padding: 12px 14px;
     --download-card-gap: 10px;
@@ -61,11 +74,12 @@
 
   /* Interface Theme: Light */
   [data-theme="light"] {
+    color-scheme: light;
     --background: #f8fafc;
     --surface: #ffffff;
     --surface-elevated: #f1f5f9;
     --surface-selected: #e2e8f0;
-    --surface-hover: #f8fafc;
+    --surface-hover: #f1f5f9;
 
     --text-primary: #0f172a;
     --text-secondary: #475569;
@@ -74,10 +88,21 @@
     --border: #cbd5e1;
     --border-subtle: #e2e8f0;
 
+    --sidebar-active-bg: var(--surface-selected);
+    --sidebar-active-text: var(--text-primary);
+    --sidebar-active-border: var(--rilo-accent);
+    --sidebar-hover-bg: var(--surface-elevated);
+    --sidebar-hover-text: var(--text-primary);
+
     --success: #059669;
     --warning: #d97706;
     --error: #e11d48;
     --overlay: rgba(15, 23, 42, 0.42);
+    --modal-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+  }
+
+  .rilo-modal-shadow {
+    box-shadow: var(--modal-shadow) !important;
   }
 
   /* Accent Color Palette Definitions */
@@ -149,16 +174,42 @@
   }
 
   /* Font Family Variants */
-  /* Font choices intentionally use installed system fonts: Rilo remains fully offline. */
-  [data-font="Inter"], [data-font="Geist"], [data-font="IBM Plex Sans"] { --font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  [data-font="Inter"] { --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  [data-font="Geist"] { --font-family: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  [data-font="IBM Plex Sans"] { --font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   [data-font="JetBrains Mono"] { --font-family: "JetBrains Mono", "Cascadia Code", "Consolas", "Courier New", monospace; }
-  [data-font="Iosevka"] { --font-family: "Iosevka", "Cascadia Mono", "Consolas", "Courier New", monospace; }
+  [data-font="Iosevka"] { --font-family: "Iosevka Web", "Iosevka", "Iosevka Fixed", "Iosevka Term", "Cascadia Mono", "Consolas", monospace; }
   [data-font="Roboto"] { --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   [data-font="System"] { --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 
-  /* Global Universal Reset & Design System Token Integration */
-  *, *::before, *::after {
+  /* Universal Global Reset & Font System Enforcement */
+  *, *::before, *::after,
+  html, body,
+  input, textarea, select, button, optgroup, option,
+  .font-sans,
+  [data-font] * {
     font-family: var(--font-family);
+  }
+
+  ::placeholder, input::placeholder, textarea::placeholder {
+    font-family: var(--font-family) !important;
+    opacity: 0.85;
+  }
+
+  [data-font="Iosevka"] .font-mono,
+  [data-font="Iosevka"] code,
+  [data-font="Iosevka"] kbd,
+  [data-font="Iosevka"] samp,
+  [data-font="Iosevka"] input.font-mono {
+    font-family: "Iosevka Web", "Iosevka", "Iosevka Fixed", "Iosevka Term", "Cascadia Mono", "Consolas", monospace !important;
+  }
+
+  [data-font="JetBrains Mono"] .font-mono,
+  [data-font="JetBrains Mono"] code,
+  [data-font="JetBrains Mono"] kbd,
+  [data-font="JetBrains Mono"] samp,
+  [data-font="JetBrains Mono"] input.font-mono {
+    font-family: "JetBrains Mono", "Cascadia Code", "Consolas", monospace !important;
   }
 
   html, body {
@@ -177,11 +228,13 @@
     color: var(--color-text);
     border-color: var(--color-input-border);
     user-select: text;
+    font-family: var(--font-family);
   }
 
   select option {
     background-color: var(--surface);
     color: var(--text-primary);
+    font-family: var(--font-family);
   }
 
   /* Accessible Focus Ring styling powered by selected accent */
@@ -232,15 +285,23 @@
 .bg-rilo-warning { background-color: var(--warning) !important; }
 .bg-rilo-error { background-color: var(--error) !important; }
 .bg-rilo-info { background-color: var(--info, var(--rilo-accent)) !important; }
-.rilo-button-primary { background:var(--color-accent); color:var(--color-accent-foreground); border:1px solid var(--color-accent); }
-.rilo-button-primary:hover { background:var(--color-accent-hover); }
-.rilo-button-secondary { background:var(--color-surface-elevated); color:var(--color-text); border:1px solid var(--color-border); }
-.rilo-button-secondary:hover, .rilo-button-toolbar:hover { background:var(--color-surface-hover); }
-.rilo-button-toolbar { background:var(--color-surface); color:var(--color-text-secondary); border:1px solid transparent; }
-.rilo-button-danger { background:color-mix(in srgb, var(--color-error) 13%, var(--color-surface)); color:var(--color-error); border:1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); }
-.rilo-button-warning { background:color-mix(in srgb, var(--color-warning) 13%, var(--color-surface)); color:var(--color-warning); border:1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border)); }
-.rilo-button-success { background:color-mix(in srgb, var(--color-success) 13%, var(--color-surface)); color:var(--color-success); border:1px solid color-mix(in srgb, var(--color-success) 40%, var(--color-border)); }
-.rilo-button-primary:disabled,.rilo-button-secondary:disabled,.rilo-button-toolbar:disabled,.rilo-button-danger:disabled,.rilo-button-warning:disabled,.rilo-button-success:disabled { background:var(--color-surface-elevated); color:var(--color-text-muted); border-color:var(--color-border-subtle); opacity:1; }
+.rilo-button-primary { background:var(--color-accent); color:var(--color-accent-foreground); border:1px solid var(--color-accent); transition: all 120ms ease-out; }
+.rilo-button-primary:hover { background:var(--color-accent-hover); filter: brightness(1.05); }
+.rilo-button-primary:active { transform: scale(0.97); filter: brightness(0.95); }
+.rilo-button-secondary { background:var(--color-surface-elevated); color:var(--color-text); border:1px solid var(--color-border); transition: all 120ms ease-out; }
+.rilo-button-secondary:hover, .rilo-button-toolbar:hover { background:var(--color-surface-hover); filter: brightness(1.04); }
+.rilo-button-secondary:active, .rilo-button-toolbar:active { transform: scale(0.97); }
+.rilo-button-toolbar { background:var(--color-surface); color:var(--color-text-secondary); border:1px solid transparent; transition: all 120ms ease-out; }
+.rilo-button-danger { background:color-mix(in srgb, var(--color-error) 13%, var(--color-surface)); color:var(--color-error); border:1px solid color-mix(in srgb, var(--color-error) 40%, var(--color-border)); transition: all 120ms ease-out; }
+.rilo-button-danger:hover { filter: brightness(1.08); }
+.rilo-button-danger:active { transform: scale(0.97); }
+.rilo-button-warning { background:color-mix(in srgb, var(--color-warning) 13%, var(--color-surface)); color:var(--color-warning); border:1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border)); transition: all 120ms ease-out; }
+.rilo-button-warning:hover { filter: brightness(1.08); }
+.rilo-button-warning:active { transform: scale(0.97); }
+.rilo-button-success { background:color-mix(in srgb, var(--color-success) 13%, var(--color-surface)); color:var(--color-success); border:1px solid color-mix(in srgb, var(--color-success) 40%, var(--color-border)); transition: all 120ms ease-out; }
+.rilo-button-success:hover { filter: brightness(1.08); }
+.rilo-button-success:active { transform: scale(0.97); }
+.rilo-button-primary:disabled,.rilo-button-secondary:disabled,.rilo-button-toolbar:disabled,.rilo-button-danger:disabled,.rilo-button-warning:disabled,.rilo-button-success:disabled { background:var(--color-surface-elevated); color:var(--color-text-muted); border-color:var(--color-border-subtle); opacity:0.6; transform: none !important; }
 .rilo-input { background:var(--color-input-background); color:var(--color-text); border-color:var(--color-input-border); }
 .rilo-input::placeholder { color:var(--color-text-muted); }
 

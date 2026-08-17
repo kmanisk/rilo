@@ -38,6 +38,7 @@ interface DownloadGridProps {
   onOpenDetails?: (item: DownloadItem) => void;
   onOpenDetailsWindow?: (item: DownloadItem) => void;
   onNewTask?: () => void;
+  useRelativeDateTime?: boolean;
 }
 
 export default function DownloadGrid({
@@ -55,6 +56,7 @@ export default function DownloadGrid({
   onOpenDetails,
   onOpenDetailsWindow,
   onNewTask,
+  useRelativeDateTime = true,
 }: DownloadGridProps) {
   const [contextMenuTarget, setContextMenuTarget] = useState<{
     item: DownloadItem;
@@ -121,11 +123,28 @@ export default function DownloadGrid({
     if (!timestamp) return "—";
     const date = new Date(timestamp);
     if (isNaN(date.getTime())) return "—";
+
+    if (useRelativeDateTime === false) {
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      const year = date.getFullYear();
+      const month = pad(date.getMonth() + 1);
+      const day = pad(date.getDate());
+      const hours = pad(date.getHours());
+      const mins = pad(date.getMinutes());
+      return `${year}-${month}-${day} ${hours}:${mins}`;
+    }
+
     const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 3600 * 24));
-    if (diffDays <= 0) return "Today";
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
     if (diffDays === 1) return "Yesterday";
-    return `${diffDays} days ago`;
+    if (diffDays < 30) return `${diffDays}d ago`;
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
   };
 
   if (sortedItems.length === 0) {

@@ -78,14 +78,52 @@ export function getDomainFromUrl(urlStr: string): string {
 export function getCategoryFromFilename(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
   switch (ext) {
+    case "zip":
+    case "rar":
+    case "7z":
+    case "tar":
+    case "gz":
+    case "bz2":
+    case "xz":
+    case "iso":
+    case "img":
+    case "tgz":
+    case "zst":
+    case "cab":
+    case "arj":
+    case "lzh":
+    case "ace":
+    case "7-zip":
+      return "Compressed";
+    case "exe":
+    case "msi":
+    case "msix":
+    case "appx":
+    case "apk":
+    case "deb":
+    case "rpm":
+    case "dmg":
+    case "pkg":
+    case "bin":
+    case "bat":
+    case "cmd":
+    case "sh":
+    case "app":
+    case "ps1":
+    case "reg":
+      return "Programs";
     case "mp4":
     case "mkv":
     case "avi":
     case "mov":
     case "webm":
     case "flv":
-    case "wmv":
     case "m4v":
+    case "wmv":
+    case "mpg":
+    case "mpeg":
+    case "3gp":
+    case "ts":
       return "Videos";
     case "mp3":
     case "wav":
@@ -93,8 +131,23 @@ export function getCategoryFromFilename(filename: string): string {
     case "flac":
     case "ogg":
     case "m4a":
+    case "opus":
     case "wma":
+    case "alac":
       return "Music";
+    case "png":
+    case "jpg":
+    case "jpeg":
+    case "gif":
+    case "svg":
+    case "webp":
+    case "bmp":
+    case "tiff":
+    case "tif":
+    case "ico":
+    case "psd":
+    case "ai":
+      return "Pictures";
     case "pdf":
     case "doc":
     case "docx":
@@ -104,32 +157,17 @@ export function getCategoryFromFilename(filename: string): string {
     case "pptx":
     case "txt":
     case "csv":
+    case "epub":
+    case "rtf":
+    case "odt":
+    case "ods":
+    case "odp":
+    case "md":
+    case "log":
+    case "xml":
+    case "json":
+    case "yaml":
       return "Documents";
-    case "zip":
-    case "rar":
-    case "7z":
-    case "tar":
-    case "gz":
-    case "bz2":
-    case "xz":
-      return "Archives";
-    case "exe":
-    case "msi":
-    case "apk":
-    case "dmg":
-    case "iso":
-    case "app":
-    case "bat":
-    case "cmd":
-      return "Programs";
-    case "png":
-    case "jpg":
-    case "jpeg":
-    case "gif":
-    case "svg":
-    case "webp":
-    case "bmp":
-      return "Images";
     default:
       return "Other";
   }

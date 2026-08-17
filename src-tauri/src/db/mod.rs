@@ -1,5 +1,5 @@
 use crate::models::{DownloadRecord, SiteCredential};
-pub use dlman_core::DownloadDatabase;
+pub use dlengine::DownloadDatabase;
 use std::path::Path;
 use uuid::Uuid;
 

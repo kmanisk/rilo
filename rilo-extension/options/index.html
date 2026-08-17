@@ -2,47 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Rilo Extension Options</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rilo Extension Preferences</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <div className="options-container">
-    <header className="options-header">
-      <div className="logo">R</div>
-      <div>
-        <h1>Rilo Extension Options</h1>
-        <p>Manage browser integration preferences</p>
+  <div class="options-container">
+    <header class="options-header">
+      <div class="logo-wrapper">
+        <img src="../icons/icon48.png" alt="Rilo" class="rilo-logo-img" />
+      </div>
+      <div class="header-text">
+        <h1>Rilo Extension Preferences</h1>
+        <p>Manage browser integration and link interception rules</p>
       </div>
     </header>
 
-    <main className="options-body">
-      <div className="section">
-        <h2>Interception Settings</h2>
+    <main class="options-body">
+      <div class="section">
+        <h2>Interception Rules</h2>
         
-        <label className="checkbox-row">
-          <input type="checkbox" id="auto-intercept" checked />
-          <div>
-            <span className="label-title">Automatically intercept download links</span>
-            <span className="label-desc">Send downloadable files directly to Rilo instead of native browser downloader</span>
+        <label class="setting-row">
+          <div class="setting-info">
+            <span class="label-title">Automatic Download Interception</span>
+            <span class="label-desc">Send downloadable files directly to Rilo desktop instead of default browser downloads</span>
           </div>
+          <label class="switch">
+            <input type="checkbox" id="auto-intercept" checked />
+            <span class="slider"></span>
+          </label>
         </label>
       </div>
 
-      <div className="section">
-        <h2>Notifications & Status</h2>
+      <div class="section">
+        <h2>Notifications & Alerts</h2>
 
-        <label className="checkbox-row">
-          <input type="checkbox" id="show-notifications" checked />
-          <div>
-            <span className="label-title">Desktop toast notifications</span>
-            <span className="label-desc">Show notification when downloads are sent to Rilo</span>
+        <label class="setting-row">
+          <div class="setting-info">
+            <span class="label-title">Desktop Notifications</span>
+            <span class="label-desc">Show notification alert when downloads are sent to Rilo</span>
           </div>
+          <label class="switch">
+            <input type="checkbox" id="show-notifications" checked />
+            <span class="slider"></span>
+          </label>
         </label>
       </div>
 
-      <div className="actions">
-        <span id="save-status" className="save-status"></span>
-        <button id="save-btn" className="save-btn">Save Preferences</button>
+      <div class="section">
+        <h2>Server Connection</h2>
+
+        <div class="setting-row-input">
+          <div class="setting-info">
+            <span class="label-title">Desktop Local Server Port</span>
+            <span class="label-desc">Port configured in Rilo Settings &gt; Browser Integration</span>
+          </div>
+          <input type="number" id="server-port" class="text-input port-input" value="7899" min="1024" max="65535" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <span id="save-status" class="save-status"></span>
+        <button id="save-btn" class="save-btn">Save Preferences</button>
       </div>
     </main>
   </div>

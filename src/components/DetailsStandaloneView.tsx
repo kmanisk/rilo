@@ -6,8 +6,9 @@ import { DownloadItem, DownloadProgressPayload, DownloadRecord, ExtractionProgre
 import { applyExtractionProgress, progressToDownloadItem, recordToDownloadItem } from "../lib/downloads/mapping";
 import DownloadDetailsModal from "./DownloadDetailsModal";
 import { AppConfig } from "./SettingsModal";
-import { applyVisualSettings, AppearanceSettings } from "../lib/settings/visual";
+import { applyVisualSettings, AppearanceSettings, parseScaleFactor } from "../lib/settings/visual";
 import { Loader2 } from "lucide-preact";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 
 interface DetailsStandaloneViewProps {
   downloadId: string;
@@ -41,13 +42,25 @@ export default function DetailsStandaloneView({ downloadId }: DetailsStandaloneV
         }
 
         if (isMounted) {
-          setItem(recordToDownloadItem(rec));
+          const loadedItem = recordToDownloadItem(rec);
+          setItem(loadedItem);
           setLoading(false);
           requestAnimationFrame(async () => {
             if (!isMounted) return;
             setIsReady(true);
             try {
               const win = getCurrentWindow();
+              if (loadedItem.status === "completed") {
+                try {
+                  const factor = parseScaleFactor(appConfig.appearance?.ui_scale);
+                  const targetW = Math.max(460, Math.round(460 * factor));
+                  const targetH = Math.max(180, Math.round(180 * factor));
+                  await win.setSize(new LogicalSize(targetW, targetH));
+                  await win.setResizable(false);
+                } catch (sizeErr) {
+                  console.warn("Could not resize details window:", sizeErr);
+                }
+              }
               await win.show();
               await win.setFocus();
             } catch (err) {
