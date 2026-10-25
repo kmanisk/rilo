@@ -2,10 +2,12 @@
 
 **A fast, lightweight, and modern desktop download manager for Windows.**
 
-[![Release](https://img.shields.io/github/v/release/kmanisk/rilo?color=blue&label=release)](https://github.com/kmanisk/rilo/releases/latest)
-[![License](https://img.shields.io/github/license/kmanisk/rilo?color=green)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/kmanisk/rilo)
-[![Scoop](https://img.shields.io/badge/scoop-rilo%2Frilo-orange)](https://github.com/kmanisk/scoop-bucket)
+[![Release](https://img.shields.io/github/v/release/kmanisk/rilo?style=flat-square&label=release)](https://github.com/kmanisk/rilo/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/kmanisk/rilo/total?style=flat-square)](https://github.com/kmanisk/rilo/releases)
+[![Stars](https://img.shields.io/github/stars/kmanisk/rilo?style=flat-square)](https://github.com/kmanisk/rilo/stargazers)
+[![License](https://img.shields.io/github/license/kmanisk/rilo?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D4?style=flat-square&logo=windows&logoColor=white)](https://github.com/kmanisk/rilo)
+[![Scoop](https://img.shields.io/badge/Scoop-rilo%2Frilo-5391FE?style=flat-square)](https://github.com/kmanisk/scoop-bucket)
 
 [Download](#download) | [Features](#features) | [Install Guide](#install-guide) | [Browser Extension](#browser-extension) | [Architecture](#architecture) | [Build from Source](#build-from-source) | [License](#license)
 
